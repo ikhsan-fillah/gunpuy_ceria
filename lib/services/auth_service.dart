@@ -40,7 +40,6 @@ class AuthService {
       final bool canCheck = await _localAuth.canCheckBiometrics;
       final bool isSupported = await _localAuth.isDeviceSupported();
       if (!canCheck || !isSupported) return false;
-      // Pastikan ada biometrik yang terdaftar
       final List<BiometricType> biometrics =
           await _localAuth.getAvailableBiometrics();
       return biometrics.isNotEmpty;
@@ -58,16 +57,16 @@ class AuthService {
       final bool ok = await _localAuth.authenticate(
         localizedReason: 'Gunakan sidik jari untuk masuk ke Gunpuy Ceria',
         options: const AuthenticationOptions(
-          biometricOnly: true,
+          biometricOnly: false, // false = boleh fallback ke PIN HP
           stickyAuth: true,
           sensitiveTransaction: false,
         ),
       );
       if (ok) {
         await _storage.write(key: _keyIsLoggedIn, value: 'true');
-        return null; // sukses
+        return null;
       }
-      return 'Sidik jari tidak dikenali, coba lagi';
+      return 'Autentikasi dibatalkan';
     } on PlatformException catch (e) {
       if (e.code == auth_error.notAvailable) {
         return 'Fitur biometrik tidak tersedia di HP ini';
@@ -83,23 +82,6 @@ class AuthService {
       return 'Error: ${e.message}';
     } catch (e) {
       return 'Terjadi kesalahan: $e';
-    }
-  }
-
-  /// Verifikasi biometrik untuk unhide data sensitif (NOP/NIK)
-  Future<bool> verifyForUnhide() async {
-    try {
-      if (!await isBiometricAvailable()) return true; // fallback jika tidak support
-      return await _localAuth.authenticate(
-        localizedReason: 'Verifikasi untuk melihat data sensitif',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-          sensitiveTransaction: false,
-        ),
-      );
-    } catch (_) {
-      return true; // fallback
     }
   }
 }
