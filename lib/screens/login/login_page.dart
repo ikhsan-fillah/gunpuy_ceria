@@ -18,6 +18,7 @@ class _LoginPageState extends State<LoginPage> {
   final AuthService _auth = AuthService();
 
   bool _isLoading = false;
+  bool _isFingerprintLoading = false;
   bool _obscure = true;
   bool _showFingerprint = false;
 
@@ -27,7 +28,6 @@ class _LoginPageState extends State<LoginPage> {
     _checkBiometric();
   }
 
-  /// Tampilkan tombol fingerprint kalau device support biometrik
   Future<void> _checkBiometric() async {
     final bool available = await _auth.isBiometricAvailable();
     if (mounted) setState(() => _showFingerprint = available);
@@ -58,19 +58,22 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _loginWithFingerprint() async {
-    final bool ok = await _auth.loginWithFingerprint();
-    if (ok && mounted) {
-      // Tandai sudah login
-      await _auth.login('', '').catchError((_) {});
-      // Langsung masuk karena fingerprint sudah verified
+    setState(() => _isFingerprintLoading = true);
+    final String? error = await _auth.loginWithFingerprint();
+    if (!mounted) return;
+    setState(() => _isFingerprintLoading = false);
+
+    if (error == null) {
+      // Sukses
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainScreen()),
       );
-    } else if (mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Autentikasi sidik jari gagal'),
+        SnackBar(
+          content: Text(error),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -193,7 +196,7 @@ class _LoginPageState extends State<LoginPage> {
                               fontWeight: FontWeight.bold)),
                 ),
 
-                // Tombol Fingerprint — muncul jika device support
+                // Tombol Fingerprint
                 if (_showFingerprint) ...[
                   const SizedBox(height: 16),
                   const Row(children: [
@@ -211,18 +214,29 @@ class _LoginPageState extends State<LoginPage> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _loginWithFingerprint,
+                      onPressed: _isFingerprintLoading
+                          ? null
+                          : _loginWithFingerprint,
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary),
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.fingerprint_rounded,
-                          color: AppColors.primary, size: 28),
-                      label: const Text(
-                        'Masuk dengan Sidik Jari',
-                        style: TextStyle(
+                      icon: _isFingerprintLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary))
+                          : const Icon(Icons.fingerprint_rounded,
+                              color: AppColors.primary, size: 28),
+                      label: Text(
+                        _isFingerprintLoading
+                            ? 'Menunggu sidik jari...'
+                            : 'Masuk dengan Sidik Jari',
+                        style: const TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w500),
                       ),
