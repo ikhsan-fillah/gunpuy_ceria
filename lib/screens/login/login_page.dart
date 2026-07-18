@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../constants/app_colors.dart';
-import '../../../constants/app_strings.dart';
-import '../../../services/auth_service.dart';
+import '../../constants/app_colors.dart';
+import '../../constants/app_strings.dart';
+import '../../services/auth_service.dart';
 import '../main_screen.dart';
 
 class LoginPage extends StatefulWidget {
@@ -24,13 +24,13 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    _checkFingerprint();
+    _checkBiometric();
   }
 
-  Future<void> _checkFingerprint() async {
+  /// Tampilkan tombol fingerprint kalau device support biometrik
+  Future<void> _checkBiometric() async {
     final bool available = await _auth.isBiometricAvailable();
-    final bool enabled   = await _auth.isFingerprintEnabled();
-    if (mounted) setState(() => _showFingerprint = available && enabled);
+    if (mounted) setState(() => _showFingerprint = available);
   }
 
   Future<void> _loginWithPassword() async {
@@ -60,8 +60,18 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _loginWithFingerprint() async {
     final bool ok = await _auth.loginWithFingerprint();
     if (ok && mounted) {
+      // Tandai sudah login
+      await _auth.login('', '').catchError((_) {});
+      // Langsung masuk karena fingerprint sudah verified
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Autentikasi sidik jari gagal'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -86,7 +96,8 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 32),
-                // Logo / ikon
+
+                // Logo
                 Center(
                   child: Container(
                     width: 80,
@@ -167,7 +178,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 28),
 
-                // Tombol login
+                // Tombol Masuk
                 ElevatedButton(
                   onPressed: _isLoading ? null : _loginWithPassword,
                   child: _isLoading
@@ -182,17 +193,38 @@ class _LoginPageState extends State<LoginPage> {
                               fontWeight: FontWeight.bold)),
                 ),
 
-                // Tombol fingerprint
+                // Tombol Fingerprint — muncul jika device support
                 if (_showFingerprint) ...[
                   const SizedBox(height: 16),
-                  Center(
-                    child: TextButton.icon(
+                  const Row(children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('atau',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary)),
+                    ),
+                    Expanded(child: Divider()),
+                  ]),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
                       onPressed: _loginWithFingerprint,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primary),
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
                       icon: const Icon(Icons.fingerprint_rounded,
                           color: AppColors.primary, size: 28),
                       label: const Text(
                         'Masuk dengan Sidik Jari',
-                        style: TextStyle(color: AppColors.primary),
+                        style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500),
                       ),
                     ),
                   ),

@@ -10,18 +10,14 @@ class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
 
-  static const String _keyUsername        = 'username';
-  static const String _keyIsLoggedIn      = 'is_logged_in';
-  static const String _keyFingerprintEnabled = 'fingerprint_enabled';
+  static const String _keyIsLoggedIn = 'is_logged_in';
 
   // ============ LOGIN ============
 
   Future<bool> login(String username, String password) async {
     final bool ok = await DatabaseHelper().login(username, password);
     if (ok) {
-      await _storage.write(key: _keyUsername, value: username);
       await _storage.write(key: _keyIsLoggedIn, value: 'true');
-      await _storage.write(key: _keyFingerprintEnabled, value: 'true');
     }
     return ok;
   }
@@ -35,37 +31,25 @@ class AuthService {
     return val == 'true';
   }
 
-  Future<String?> getUsername() async {
-    return await _storage.read(key: _keyUsername);
-  }
+  // ============ BIOMETRIK ============
 
-  // ============ FINGERPRINT ============
-
+  /// Cek apakah device mendukung biometrik (fingerprint / face ID)
   Future<bool> isBiometricAvailable() async {
     try {
       final bool canCheck = await _localAuth.canCheckBiometrics;
-      final bool isDeviceSupported = await _localAuth.isDeviceSupported();
-      return canCheck && isDeviceSupported;
+      final bool isSupported = await _localAuth.isDeviceSupported();
+      return canCheck && isSupported;
     } catch (_) {
       return false;
     }
   }
 
-  Future<bool> isFingerprintEnabled() async {
-    final String? val =
-        await _storage.read(key: _keyFingerprintEnabled);
-    return val == 'true';
-  }
-
+  /// Login menggunakan biometrik (fingerprint / face ID)
   Future<bool> loginWithFingerprint() async {
     try {
-      final bool available = await isBiometricAvailable();
-      if (!available) return false;
-      final bool enabled = await isFingerprintEnabled();
-      if (!enabled) return false;
-
+      if (!await isBiometricAvailable()) return false;
       return await _localAuth.authenticate(
-        localizedReason: 'Gunakan sidik jari untuk masuk',
+        localizedReason: 'Gunakan sidik jari untuk masuk ke Gunpuy Ceria',
         options: const AuthenticationOptions(
           biometricOnly: false,
           stickyAuth: true,
@@ -77,11 +61,10 @@ class AuthService {
   }
 
   /// Verifikasi biometrik untuk membuka data sensitif (unhide NOP/NIK)
+  /// Jika device tidak support, langsung izinkan (fallback)
   Future<bool> verifyForUnhide() async {
     try {
-      final bool available = await isBiometricAvailable();
-      if (!available) return true; // fallback: izinkan jika device tidak support
-
+      if (!await isBiometricAvailable()) return true;
       return await _localAuth.authenticate(
         localizedReason: 'Verifikasi untuk melihat data sensitif',
         options: const AuthenticationOptions(
