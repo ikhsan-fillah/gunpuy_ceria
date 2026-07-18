@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../constants/app_colors.dart';
 import '../../../constants/app_strings.dart';
 import '../../../database/database_helper.dart';
-import '../../../models/warga_model.dart';
 import '../../../utils/masking_helper.dart';
 import '../../../services/auth_service.dart';
 import 'detail_kk_page.dart';

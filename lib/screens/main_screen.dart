@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'constants/app_colors.dart';
-import 'screens/home/home_page.dart';
-import 'screens/warga/warga_page.dart';
-import 'screens/sppt/sppt_page.dart';
+import 'package:gunpuy_ceria/constants/app_colors.dart';
+import 'package:gunpuy_ceria/screens/home/home_page.dart';
+import 'package:gunpuy_ceria/screens/warga/warga_page.dart';
+import 'package:gunpuy_ceria/screens/sppt/sppt_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -36,20 +36,17 @@ class _MainScreenState extends State<MainScreen> {
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded,
-                color: AppColors.primary),
+            selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary),
             label: 'Beranda',
           ),
           NavigationDestination(
             icon: Icon(Icons.people_outline_rounded),
-            selectedIcon: Icon(Icons.people_rounded,
-                color: AppColors.primary),
+            selectedIcon: Icon(Icons.people_rounded, color: AppColors.primary),
             label: 'Warga',
           ),
           NavigationDestination(
             icon: Icon(Icons.map_outlined),
-            selectedIcon:
-                Icon(Icons.map_rounded, color: AppColors.primary),
+            selectedIcon: Icon(Icons.map_rounded, color: AppColors.primary),
             label: 'SPPT',
           ),
         ],

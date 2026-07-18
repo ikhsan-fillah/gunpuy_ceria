@@ -151,8 +151,9 @@ class DatabaseHelper {
       final DateTime tgl = DateTime.parse(row['tanggal_lahir'] as String);
       int umur = now.year - tgl.year;
       if (now.month < tgl.month || (now.month == tgl.month && now.day < tgl.day)) umur--;
-      if (umur <= 5)       balita++;
-      else if (umur <= 11) anakAnak++;
+      if (umur <= 5) {
+        balita++;
+      } else if (umur <= 11) anakAnak++;
       else if (umur <= 17) remaja++;
       else if (umur <= 59) dewasa++;
       else                 lansia++;

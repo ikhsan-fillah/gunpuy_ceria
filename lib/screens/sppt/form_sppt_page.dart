@@ -34,12 +34,17 @@ class _FormSpptPageState extends State<FormSpptPage> {
     setState(() => _isSaving = true);
     final data = SpptModel(id: widget.sppt?.id, nomorPetak: _nomorPetakCtrl.text.trim(), nop: _nopCtrl.text.trim(), namaPemilik: _namaPemilikCtrl.text.trim());
     try {
-      if (isEdit) await _db.updateSPPT(widget.sppt!.id!, data.toMap());
-      else await _db.insertSPPT(data.toMap());
+      if (isEdit) {
+        await _db.updateSPPT(widget.sppt!.id!, data.toMap());
+      } else {
+        await _db.insertSPPT(data.toMap());
+      }
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Nomor petak ${_nomorPetakCtrl.text} sudah digunakan'), backgroundColor: Colors.red));
+      }
     } finally { if (mounted) setState(() => _isSaving = false); }
   }
 

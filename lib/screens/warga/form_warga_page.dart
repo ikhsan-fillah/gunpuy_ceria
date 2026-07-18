@@ -37,7 +37,9 @@ class _FormWargaPageState extends State<FormWargaPage> {
 
   @override
   void dispose() {
-    for (var c in [_noKKCtrl, _namaCtrl, _nikCtrl, _tglLahirCtrl, _rtCtrl, _rwCtrl, _pendidikanCtrl, _pekerjaanCtrl]) c.dispose();
+    for (var c in [_noKKCtrl, _namaCtrl, _nikCtrl, _tglLahirCtrl, _rtCtrl, _rwCtrl, _pendidikanCtrl, _pekerjaanCtrl]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -62,8 +64,11 @@ class _FormWargaPageState extends State<FormWargaPage> {
       statusPendidikan: _pendidikanCtrl.text.trim().isEmpty ? null : _pendidikanCtrl.text.trim(),
       pekerjaan: _pekerjaanCtrl.text.trim().isEmpty ? null : _pekerjaanCtrl.text.trim(),
     );
-    if (isEdit) await _db.updateWarga(widget.warga!.id!, data.toMap());
-    else await _db.insertWarga(data.toMap());
+    if (isEdit) {
+      await _db.updateWarga(widget.warga!.id!, data.toMap());
+    } else {
+      await _db.insertWarga(data.toMap());
+    }
     if (mounted) { setState(() => _isSaving = false); Navigator.pop(context); }
   }
 

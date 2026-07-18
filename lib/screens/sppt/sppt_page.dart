@@ -50,7 +50,9 @@ class _SpptPageState extends State<SpptPage> {
   }
 
   void _onSort(String column) {
-    setState(() { if (_sortColumn == column) _sortAscending = !_sortAscending; else { _sortColumn = column; _sortAscending = true; } });
+    setState(() { if (_sortColumn == column) {
+      _sortAscending = !_sortAscending;
+    } else { _sortColumn = column; _sortAscending = true; } });
     _loadData();
   }
 

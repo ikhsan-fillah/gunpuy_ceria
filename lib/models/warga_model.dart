@@ -58,7 +58,9 @@ class WargaModel {
     final DateTime now = DateTime.now();
     int age = now.year - tgl.year;
     if (now.month < tgl.month ||
-        (now.month == tgl.month && now.day < tgl.day)) age--;
+        (now.month == tgl.month && now.day < tgl.day)) {
+      age--;
+    }
     return age;
   }
 

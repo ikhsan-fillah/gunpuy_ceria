@@ -21,7 +21,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
   List<WargaModel> _anggota = [];
   bool _isLoading = true;
   bool _isUnhidden = false;
-  Set<int> _expandedIds = {};
+  final Set<int> _expandedIds = {};
 
   @override
   void initState() { super.initState(); _loadAnggota(); }
@@ -42,7 +42,9 @@ class _DetailKKPageState extends State<DetailKKPage> {
   @override
   Widget build(BuildContext context) {
     final Map<String, int> kategoriCount = {};
-    for (var w in _anggota) kategoriCount[w.kategoriUsia] = (kategoriCount[w.kategoriUsia] ?? 0) + 1;
+    for (var w in _anggota) {
+      kategoriCount[w.kategoriUsia] = (kategoriCount[w.kategoriUsia] ?? 0) + 1;
+    }
     final String ringkasan = kategoriCount.entries.map((e) => '${e.value} ${e.key}').join(', ');
 
     return Scaffold(
@@ -98,8 +100,11 @@ class _DetailKKPageState extends State<DetailKKPage> {
                   warga: warga, isUnhidden: _isUnhidden,
                   isExpanded: _expandedIds.contains(warga.id),
                   onToggle: () => setState(() {
-                    if (_expandedIds.contains(warga.id)) _expandedIds.remove(warga.id);
-                    else _expandedIds.add(warga.id!);
+                    if (_expandedIds.contains(warga.id)) {
+                      _expandedIds.remove(warga.id);
+                    } else {
+                      _expandedIds.add(warga.id!);
+                    }
                   }),
                   onEdit: () async {
                     await Navigator.push(context, MaterialPageRoute(builder: (_) => FormWargaPage(warga: warga)));
