@@ -11,7 +11,7 @@ class _ScanItem {
   final String nomorPetak;
   final String namaPemilik;
   bool dipilih;
-  bool isUpdate; // true jika data ini akan mengganti nama lama
+  bool isUpdate;
   String namaLama;
 
   _ScanItem({
@@ -43,20 +43,17 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
 
   // ─── Parse NOP → nomor petak ──────────────────────────────────────────────
   // Format: 34.01.060.002.013.0001.0
-  // Digit ke-6 (0001) = nomor urut petak di blok
+  // Segment ke-6 (index 5) = nomor urut petak
   String _parseNomorPetak(String nop) {
-    // Hapus semua spasi
     final clean = nop.replaceAll(' ', '');
-    // Pecah berdasarkan titik
     final parts = clean.split('.');
-    // Segment ke-6 (index 5) adalah nomor urut 4 digit → hilangkan leading zero
     if (parts.length >= 6) {
       return int.tryParse(parts[5])?.toString() ?? parts[5];
     }
     return clean;
   }
 
-  // ─── OCR + Parse tabel ────────────────────────────────────────────────────
+  // ─── OCR ──────────────────────────────────────────────────────────────────
   Future<void> _scanGambar(ImageSource source) async {
     final XFile? picked = await _picker.pickImage(
       source: source,
@@ -84,19 +81,23 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
 
       final List<_ScanItem> parsed = _parseOcrResult(recognized.text);
 
-      // Cek duplikat di DB
+      // Cek duplikat di DB — by NOP (bukan nama)
+      // 1 orang bisa punya banyak NOP, jadi duplikat = NOP yang sama
       for (final item in parsed) {
         final existing = await _db.getSPPTByNop(item.nop);
         if (existing != null) {
           final namaLama = existing['nama_pemilik'] as String;
           if (namaLama.trim().toUpperCase() !=
               item.namaPemilik.trim().toUpperCase()) {
+            // NOP sama, nama berbeda → tandai sebagai update
             item.isUpdate = true;
             item.namaLama = namaLama;
           } else {
-            item.dipilih = false; // sama persis → uncheck otomatis
+            // NOP sama, nama sama → skip (uncheck otomatis)
+            item.dipilih = false;
           }
         }
+        // NOP belum ada di DB → insert baru (dipilih = true default)
       }
 
       setState(() {
@@ -115,39 +116,111 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
   }
 
   // ─── Parser hasil OCR ─────────────────────────────────────────────────────
-  // Strategi: cari pola NOP (xx.xx.xxx.xxx.xxx.xxxx.x) lalu ambil
-  // token nama di baris / blok yang sama atau berikutnya.
+  //
+  // Masalah OCR tabel:
+  // 1. Nama kadang ada di baris yang sama dengan NOP (setelah tahun)
+  // 2. Nama kadang terpotong ke baris berikutnya (OCR line-break di tengah nama)
+  // 3. Satu orang bisa punya banyak NOP → duplikat by NOP, BUKAN by nama
+  //
+  // Strategi:
+  // - Scan semua baris, cari NOP dengan regex
+  // - Untuk setiap NOP, gabungkan teks dari baris yang sama + baris berikutnya
+  //   selama baris berikutnya bukan NOP baru dan bukan header tabel
+  // - Duplikat: cek by NOP saja
   List<_ScanItem> _parseOcrResult(String rawText) {
     final List<_ScanItem> result = [];
 
-    // Regex NOP: digit.digit.digit.digit.digit.digit.digit
-    // Contoh: 34.01.060.002.013.0001.0
     final RegExp nopRegex = RegExp(
-      r'\b(\d{2}\.\d{2}\.\d{3}\.\d{3}\.\d{3}\.\d{4}\.\d)\b',
+      r'(\d{2}[.\s]\d{2}[.\s]\d{3}[.\s]\d{3}[.\s]\d{3}[.\s]\d{4}[.\s]\d)',
     );
 
-    // Split per baris
+    // Regex header/footer tabel yang harus diabaikan
+    final RegExp headerRegex = RegExp(
+      r'^(No|NOP|Nama|Tahun|No\.|Blok|\d+\s*$)',
+      caseSensitive: false,
+    );
+
     final lines = rawText.split('\n');
 
     for (int i = 0; i < lines.length; i++) {
-      final line = lines[i];
+      final line = lines[i].trim();
       final match = nopRegex.firstMatch(line);
       if (match == null) continue;
 
-      final String nop = match.group(1)!.replaceAll(' ', '');
+      // Normalisasi NOP: hapus spasi di antara digit-titik
+      final String nopRaw = match.group(1)!;
+      final String nop = nopRaw.replaceAll(RegExp(r'\s+'), '');
       final String nomorPetak = _parseNomorPetak(nop);
 
-      // Ambil nama dari baris yang sama (setelah NOP dan tahun)
-      // atau baris berikutnya jika tidak ada
-      String nama = _extractNama(line, nop) ??
-          (i + 1 < lines.length ? _extractNamaFallback(lines[i + 1]) : null) ??
-          '';
-
-      nama = nama.trim();
-      if (nama.isEmpty) continue;
-
-      // Hindari duplikat NOP
+      // Hindari duplikat NOP dalam hasil scan ini
       if (result.any((e) => e.nop == nop)) continue;
+
+      // ── Ekstrak nama ──────────────────────────────────────────────────────
+      // Langkah 1: ambil sisa teks di baris yang sama setelah NOP
+      String sisaBaris = line.substring(match.end).trim();
+      // Hapus tahun (4 digit, misal 2026) di awal sisa
+      sisaBaris = sisaBaris.replaceAll(RegExp(r'^\s*20\d{2}\s*'), '').trim();
+      // Hapus karakter non-huruf di awal (misal nomor urut, pipe, bracket)
+      sisaBaris = sisaBaris.replaceAll(RegExp(r'^[\d|\[\]{}\s]+'), '').trim();
+
+      String nama = sisaBaris;
+
+      // Langkah 2: jika nama di baris ini kosong atau sangat pendek,
+      // lihat ke baris-baris berikutnya (selama bukan NOP baru / header)
+      if (_isNamaTerlalupendek(nama)) {
+        final StringBuffer buf = StringBuffer(nama);
+        for (int j = i + 1; j <= i + 3 && j < lines.length; j++) {
+          final nextLine = lines[j].trim();
+          // Hentikan jika baris berikutnya adalah NOP baru
+          if (nopRegex.hasMatch(nextLine)) break;
+          // Hentikan jika baris berikutnya adalah header tabel
+          if (headerRegex.hasMatch(nextLine)) break;
+          // Hentikan jika baris berikutnya hanya angka (nomor urut)
+          if (RegExp(r'^\d+$').hasMatch(nextLine)) break;
+
+          final String kandidat = _bersihkanBaris(nextLine);
+          if (kandidat.isNotEmpty) {
+            buf.write(buf.isEmpty ? '' : ' ');
+            buf.write(kandidat);
+            // Jika sudah cukup panjang, berhenti
+            if (buf.length >= 4) break;
+          }
+        }
+        nama = buf.toString().trim();
+      }
+
+      // Langkah 3: jika nama masih terpotong (OCR pisah nama di 2 baris
+      // tapi baris berikutnya ada lanjutan teks tanpa NOP baru)
+      // → coba gabung sampai ketemu NOP berikutnya
+      if (!_isNamaTerlalupendek(nama)) {
+        // Nama sudah OK, tapi cek apakah baris berikutnya adalah
+        // lanjutan nama (tidak ada angka, tidak ada NOP)
+        if (i + 1 < lines.length) {
+          final nextLine = lines[i + 1].trim();
+          if (!nopRegex.hasMatch(nextLine) &&
+              !headerRegex.hasMatch(nextLine) &&
+              !RegExp(r'^\d+$').hasMatch(nextLine)) {
+            final String lanjutan = _bersihkanBaris(nextLine);
+            // Gabung hanya jika lanjutan adalah huruf saja (bukan angka)
+            if (lanjutan.isNotEmpty &&
+                lanjutan.contains(RegExp(r'[A-Za-z]')) &&
+                !lanjutan.contains(RegExp(r'\d'))) {
+              // Cek: apakah seperti sambungan nama (tidak ada titik / kata kunci)
+              final bool bukan_header = !RegExp(
+                r'(nop|nama|tahun|blok|no\.)',
+                caseSensitive: false,
+              ).hasMatch(lanjutan);
+              if (bukan_header) {
+                nama = '$nama $lanjutan'.trim();
+              }
+            }
+          }
+        }
+      }
+
+      // Bersihkan nama akhir
+      nama = _normalizeNama(nama);
+      if (nama.isEmpty) continue;
 
       result.add(_ScanItem(
         nop: nop,
@@ -164,43 +237,43 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
     return result;
   }
 
-  /// Ekstrak nama dari baris yang sama dengan NOP.
-  /// Setelah NOP biasanya ada tahun (4 digit) lalu nama.
-  String? _extractNama(String line, String nop) {
-    // Hapus NOP dari baris
-    String sisa = line.replaceAll(nop, '').trim();
-    // Hapus angka nomor urut di awal (misal "1", "12")
-    sisa = sisa.replaceAll(RegExp(r'^\d+\s*'), '');
-    // Hapus tahun 4 digit (misal 2026)
-    sisa = sisa.replaceAll(RegExp(r'\b20\d{2}\b'), '').trim();
-    // Hapus karakter aneh
-    sisa = sisa.replaceAll(RegExp(r'[|\[\]{}]'), '').trim();
+  bool _isNamaTerlalupendek(String s) => s.trim().length < 3;
 
-    if (sisa.length >= 3 &&
-        sisa.contains(RegExp(r'[A-Za-z]'))) {
-      return sisa.toUpperCase();
-    }
-    return null;
+  /// Bersihkan baris dari karakter aneh, sisakan huruf dan spasi
+  String _bersihkanBaris(String line) {
+    return line
+        .replaceAll(RegExp(r'[|\[\]{}\\]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
-  /// Fallback: ambil nama dari baris berikutnya jika murni teks
-  String? _extractNamaFallback(String line) {
-    final clean = line
-        .replaceAll(RegExp(r'\d'), '')
-        .replaceAll(RegExp(r'[^A-Za-z\s]'), '')
-        .trim();
-    if (clean.length >= 3) return clean.toUpperCase();
-    return null;
+  /// Normalisasi nama akhir:
+  /// - Hapus angka di awal/akhir
+  /// - Hapus karakter selain huruf, spasi, titik, tanda hubung
+  /// - Uppercase
+  String _normalizeNama(String nama) {
+    String result = nama
+        .replaceAll(RegExp(r'^[\d\s|.,-]+'), '') // hapus angka di awal
+        .replaceAll(RegExp(r'[\d|]+$'), '')      // hapus angka di akhir
+        .replaceAll(RegExp(r'[^A-Za-z\s.\-]'), '') // hanya huruf
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toUpperCase();
+    // Abaikan jika hasil adalah header tabel
+    if (RegExp(r'^(NOP|NAMA|TAHUN|BLOK|NO)\.?$').hasMatch(result)) return '';
+    return result;
   }
 
   // ─── Import ke DB ─────────────────────────────────────────────────────────
   Future<void> _importData() async {
-    final selected =
-        _items.where((e) => e.dipilih).map((e) => {
-          'nop': e.nop,
-          'nomor_petak': e.nomorPetak,
-          'nama_pemilik': e.namaPemilik,
-        }).toList();
+    final selected = _items
+        .where((e) => e.dipilih)
+        .map((e) => {
+              'nop': e.nop,
+              'nomor_petak': e.nomorPetak,
+              'nama_pemilik': e.namaPemilik,
+            })
+        .toList();
 
     if (selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -274,68 +347,62 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                 decoration: BoxDecoration(
                     color: AppColors.primarySurface,
                     borderRadius: BorderRadius.circular(16)),
-                child: Column(
-                    children: [
-                      const Icon(Icons.document_scanner_rounded,
-                          size: 64, color: AppColors.primary),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Scan Data SPPT',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Foto atau upload tabel data SPPT dari pemerintah.\nSistem akan membaca NOP dan nama pemilik secara otomatis.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 24),
-                      // Tips foto yang baik
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color: AppColors.primaryLight, width: 1)),
-                        child: const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: [
-                                Icon(Icons.tips_and_updates_rounded,
-                                    size: 16, color: AppColors.primary),
-                                SizedBox(width: 6),
-                                Text('Tips agar hasil scan akurat:',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary)),
-                              ]),
-                              SizedBox(height: 8),
-                              _TipsItem('Pastikan pencahayaan cukup'),
-                              _TipsItem(
-                                  'Foto tegak lurus, tidak miring'),
-                              _TipsItem(
-                                  'Seluruh tabel masuk dalam frame'),
-                              _TipsItem(
-                                  'Resolusi gambar cukup jelas (tidak blur)'),
-                            ]),
-                      ),
-                    ]),
+                child: Column(children: [
+                  const Icon(Icons.document_scanner_rounded,
+                      size: 64, color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Scan Data SPPT',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Foto atau upload tabel data SPPT dari pemerintah.\nSistem akan membaca NOP dan nama pemilik secara otomatis.',
+                    textAlign: TextAlign.center,
+                    style:
+                        TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppColors.primaryLight, width: 1)),
+                    child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(Icons.tips_and_updates_rounded,
+                                size: 16, color: AppColors.primary),
+                            SizedBox(width: 6),
+                            Text('Tips agar hasil scan akurat:',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary)),
+                          ]),
+                          SizedBox(height: 8),
+                          _TipsItem('Pastikan pencahayaan cukup'),
+                          _TipsItem('Foto tegak lurus, tidak miring'),
+                          _TipsItem('Seluruh tabel masuk dalam frame'),
+                          _TipsItem(
+                              'Resolusi gambar cukup jelas (tidak blur)'),
+                        ]),
+                  ),
+                ]),
               ),
               const SizedBox(height: 24),
               if (_statusText.isNotEmpty) ...[
                 Text(_statusText,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 13, color: Colors.red)),
+                    style: const TextStyle(fontSize: 13, color: Colors.red)),
                 const SizedBox(height: 16),
               ],
-              // Tombol pilih gambar
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -378,57 +445,51 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
 
   Widget _buildPreview() {
     final int dipilihCount = _items.where((e) => e.dipilih).length;
-    final int updateCount = _items.where((e) => e.dipilih && e.isUpdate).length;
+    final int updateCount =
+        _items.where((e) => e.dipilih && e.isUpdate).length;
     final int newCount = dipilihCount - updateCount;
 
     return Column(children: [
-      // Header ringkasan
       Container(
         width: double.infinity,
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         color: AppColors.primarySurface,
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${_items.length} data berhasil dibaca dari gambar',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              Text(
-                  'Dipilih: $dipilihCount  •  Baru: $newCount  •  Update: $updateCount',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(height: 8),
-              // Scan ulang
-              Row(children: [
-                GestureDetector(
-                  onTap: () => _scanGambar(ImageSource.gallery),
-                  child: const Text('📁 Scan gambar lain',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.primary,
-                          decoration: TextDecoration.underline)),
-                ),
-                const SizedBox(width: 16),
-                GestureDetector(
-                  onTap: () => _scanGambar(ImageSource.camera),
-                  child: const Text('📷 Foto ulang',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.primary,
-                          decoration: TextDecoration.underline)),
-                ),
-              ]),
-            ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${_items.length} data berhasil dibaca dari gambar',
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text(
+              'Dipilih: $dipilihCount  •  Baru: $newCount  •  Update: $updateCount',
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 8),
+          Row(children: [
+            GestureDetector(
+              onTap: () => _scanGambar(ImageSource.gallery),
+              child: const Text('📁 Scan gambar lain',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline)),
+            ),
+            const SizedBox(width: 16),
+            GestureDetector(
+              onTap: () => _scanGambar(ImageSource.camera),
+              child: const Text('📷 Foto ulang',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline)),
+            ),
+          ]),
+        ]),
       ),
-      // Daftar item
       Expanded(
           child: ListView.builder(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         itemCount: _items.length,
         itemBuilder: (_, idx) {
           final item = _items[idx];
@@ -439,15 +500,13 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                 borderRadius: BorderRadius.circular(10)),
             child: CheckboxListTile(
               value: item.dipilih,
-              onChanged: (v) =>
-                  setState(() => item.dipilih = v ?? false),
+              onChanged: (v) => setState(() => item.dipilih = v ?? false),
               controlAffinity: ListTileControlAffinity.leading,
               activeColor: AppColors.primary,
               title: Row(children: [
-                // Badge nomor petak
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(6)),
@@ -462,8 +521,8 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                 const SizedBox(width: 8),
                 if (item.isUpdate)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                         color: Colors.orange.shade100,
                         borderRadius: BorderRadius.circular(6)),
@@ -486,8 +545,7 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                     if (item.isUpdate)
                       Text('Nama lama: ${item.namaLama}',
                           style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.orange)),
+                              fontSize: 11, color: Colors.orange)),
                     Text(item.nop,
                         style: const TextStyle(
                             fontSize: 11,
@@ -497,7 +555,6 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
           );
         },
       )),
-      // Tombol import
       Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         decoration: BoxDecoration(
@@ -512,16 +569,15 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
         child: SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed:
-                dipilihCount == 0 ? null : _importData,
+            onPressed: dipilihCount == 0 ? null : _importData,
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 disabledBackgroundColor: AppColors.primaryLight,
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
-            icon: const Icon(Icons.cloud_upload_rounded,
-                color: Colors.white),
+            icon:
+                const Icon(Icons.cloud_upload_rounded, color: Colors.white),
             label: Text(
               'Simpan $dipilihCount Data Terpilih',
               style: const TextStyle(
@@ -583,11 +639,9 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                   onPressed: () => Navigator.pop(context, true),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      minimumSize:
-                          const Size(double.infinity, 50),
+                      minimumSize: const Size(double.infinity, 50),
                       shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(10))),
+                          borderRadius: BorderRadius.circular(10))),
                   child: const Text('Kembali ke Data SPPT',
                       style: TextStyle(
                           color: Colors.white,
@@ -606,8 +660,8 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                   });
                 },
                 child: const Text('Scan Gambar Lagi',
-                    style: TextStyle(
-                        color: AppColors.primary, fontSize: 14)),
+                    style:
+                        TextStyle(color: AppColors.primary, fontSize: 14)),
               ),
             ]),
       ),
