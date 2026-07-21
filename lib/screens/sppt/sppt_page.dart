@@ -10,6 +10,7 @@ import '../../utils/masking_helper.dart';
 import '../../services/peta_service.dart';
 import '../../services/auth_service.dart';
 import 'form_sppt_page.dart';
+import 'scan_sppt_page.dart';
 
 class SpptPage extends StatefulWidget {
   const SpptPage({super.key});
@@ -208,6 +209,19 @@ class _SpptPageState extends State<SpptPage> {
       appBar: AppBar(
         title: const Text(AppStrings.spptTitle),
         actions: [
+          // Tombol Scan Import
+          IconButton(
+            icon: const Icon(Icons.document_scanner_rounded,
+                color: Colors.white),
+            tooltip: 'Scan Import Data',
+            onPressed: () async {
+              final result = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ScanSpptPage()));
+              if (result == true) _loadData();
+            },
+          ),
           if (adaNOP)
             if (_isVerifying)
               const Padding(
@@ -407,6 +421,29 @@ class _SpptPageState extends State<SpptPage> {
                                     const Text('Belum ada data SPPT',
                                         style: TextStyle(
                                             color: AppColors.textSecondary)),
+                                    const SizedBox(height: 12),
+                                    OutlinedButton.icon(
+                                      onPressed: () async {
+                                        final result =
+                                            await Navigator.push<bool>(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const ScanSpptPage()));
+                                        if (result == true) _loadData();
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                          side: const BorderSide(
+                                              color: AppColors.primary)),
+                                      icon: const Icon(
+                                          Icons.document_scanner_rounded,
+                                          color: AppColors.primary,
+                                          size: 18),
+                                      label: const Text('Scan Import Data',
+                                          style: TextStyle(
+                                              color: AppColors.primary,
+                                              fontSize: 13)),
+                                    ),
                                   ])))
                           : _buildTabel(),
                       const SizedBox(height: 80),
@@ -632,7 +669,7 @@ class _SpptPageState extends State<SpptPage> {
   }
 }
 
-// ───── Bottom Sheet Verifikasi ──────────────────────────────────────────────
+// ─────────── Bottom Sheet Verifikasi ───────────────────────────────────────────
 class _VerifikasiSheet extends StatelessWidget {
   final String labelData;
   final VoidCallback onVerify;
@@ -712,7 +749,7 @@ class _VerifikasiSheet extends StatelessWidget {
   }
 }
 
-// ───── Peta Fullscreen ───────────────────────────────────────────────────────
+// ─────────── Peta Fullscreen ───────────────────────────────────────────────────
 class _PetaFullScreen extends StatelessWidget {
   final String imagePath;
   final List<SpptModel> spptList;
@@ -746,7 +783,7 @@ class _PetaFullScreen extends StatelessWidget {
   }
 }
 
-// ───── Section Header ────────────────────────────────────────────────────────
+// ─────────── Section Header ────────────────────────────────────────────────────
 class _SectionHeader extends StatelessWidget {
   final String title, subtitle;
   const _SectionHeader({required this.title, required this.subtitle});
