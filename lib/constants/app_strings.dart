@@ -35,7 +35,7 @@ class AppStrings {
 
   // SPPT page
   static const String spptTitle       = 'Data SPPT';
-  static const String spptPetaNote    = 'Tap peta untuk zoom. Ketuk ✏️ untuk ganti gambar.';
+  static const String spptPetaNote    = 'Tap peta untuk zoom. Tap ✏️ untuk ganti gambar.';
   static const String spptLegendTitle = 'Legenda Petak';
   static const String spptSearchHint  = 'Cari NOP atau nama pemilik...';
 
