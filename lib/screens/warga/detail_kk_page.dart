@@ -4,6 +4,7 @@ import '../../constants/app_strings.dart';
 import '../../database/database_helper.dart';
 import '../../models/warga_model.dart';
 import '../../utils/masking_helper.dart';
+import '../../services/auth_service.dart';
 import 'form_warga_page.dart';
 
 class DetailKKPage extends StatefulWidget {
@@ -16,9 +17,11 @@ class DetailKKPage extends StatefulWidget {
 
 class _DetailKKPageState extends State<DetailKKPage> {
   final DatabaseHelper _db = DatabaseHelper();
+  final AuthService _auth = AuthService();
   List<WargaModel> _anggota = [];
   bool _isLoading = true;
   bool _isUnhidden = false;
+  bool _isVerifying = false;
   final Set<int> _expandedIds = {};
 
   @override
@@ -37,31 +40,41 @@ class _DetailKKPageState extends State<DetailKKPage> {
       setState(() => _isUnhidden = false);
       return;
     }
-    // Konfirmasi sebelum tampilkan data sensitif
-    final bool confirm = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Row(children: [
-              Icon(Icons.lock_open_rounded, color: AppColors.primary, size: 20),
-              SizedBox(width: 8),
-              Text('Tampilkan Data Sensitif'),
-            ]),
-            content: const Text(
-                'NIK dan No. KK akan ditampilkan.\nPastikan tidak ada orang lain yang melihat layar.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Batal')),
-              ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary),
-                  child: const Text('Tampilkan')),
-            ],
-          ),
-        ) ??
-        false;
-    if (confirm && mounted) setState(() => _isUnhidden = true);
+    await _showVerifikasiSheet();
+  }
+
+  Future<void> _showVerifikasiSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _VerifikasiSheet(
+        labelData: 'NIK dan No. KK',
+        onVerify: () async {
+          Navigator.pop(ctx);
+          await _doVerify();
+        },
+        onCancel: () => Navigator.pop(ctx),
+      ),
+    );
+  }
+
+  Future<void> _doVerify() async {
+    setState(() => _isVerifying = true);
+    final String? error = await _auth.verifyForUnhide();
+    if (!mounted) return;
+    setState(() => _isVerifying = false);
+
+    if (error == null) {
+      setState(() => _isUnhidden = true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ));
+    }
   }
 
   String _maskOrShow(String? value) =>
@@ -71,8 +84,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
   Widget build(BuildContext context) {
     final Map<String, int> kategoriCount = {};
     for (var w in _anggota) {
-      kategoriCount[w.kategoriUsia] =
-          (kategoriCount[w.kategoriUsia] ?? 0) + 1;
+      kategoriCount[w.kategoriUsia] = (kategoriCount[w.kategoriUsia] ?? 0) + 1;
     }
     final String ringkasan =
         kategoriCount.entries.map((e) => '${e.value} ${e.key}').join(', ');
@@ -81,31 +93,35 @@ class _DetailKKPageState extends State<DetailKKPage> {
       appBar: AppBar(
         title: Text(widget.namaKepala),
         actions: [
-          TextButton.icon(
-            onPressed: _toggleUnhide,
-            icon: Icon(
-                _isUnhidden
-                    ? Icons.lock_open_rounded
-                    : Icons.lock_rounded,
-                color: Colors.white,
-                size: 18),
-            label: Text(
-                _isUnhidden
-                    ? AppStrings.btnHide
-                    : AppStrings.btnUnhide,
-                style: const TextStyle(color: Colors.white)),
-          ),
+          if (_isVerifying)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white)),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: _toggleUnhide,
+              icon: Icon(
+                  _isUnhidden ? Icons.lock_open_rounded : Icons.lock_rounded,
+                  color: Colors.white, size: 18),
+              label: Text(
+                  _isUnhidden ? AppStrings.btnHide : AppStrings.btnUnhide,
+                  style: const TextStyle(color: Colors.white)),
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
-          await Navigator.push(
-              context,
+          await Navigator.push(context,
               MaterialPageRoute(
-                  builder: (_) =>
-                      FormWargaPage(defaultNoKK: widget.noKK)));
+                  builder: (_) => FormWargaPage(defaultNoKK: widget.noKK)));
           _loadAnggota();
         },
         child: const Icon(Icons.person_add_rounded),
@@ -131,22 +147,19 @@ class _DetailKKPageState extends State<DetailKKPage> {
                                   style: TextStyle(
                                       fontSize: 13,
                                       color: AppColors.textSecondary)),
-                              Text(
-                                _maskOrShow(widget.noKK),
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isUnhidden
-                                        ? AppColors.textPrimary
-                                        : AppColors.masked,
-                                    letterSpacing:
-                                        _isUnhidden ? 0 : 1),
-                              ),
+                              Text(_maskOrShow(widget.noKK),
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: _isUnhidden
+                                          ? AppColors.textPrimary
+                                          : AppColors.masked,
+                                      letterSpacing: _isUnhidden ? 0 : 1)),
                             ]),
                             if (_anggota.isNotEmpty) ...[
                               const SizedBox(height: 4),
                               Text(
-                                  'RT ${_anggota.first.rt} / RW ${_anggota.first.rw}  \u2022  ${_anggota.length} anggota',
+                                  'RT ${_anggota.first.rt} / RW ${_anggota.first.rw}  •  ${_anggota.length} anggota',
                                   style: const TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary)),
@@ -214,6 +227,91 @@ class _DetailKKPageState extends State<DetailKKPage> {
   }
 }
 
+// ───── Bottom Sheet Verifikasi ──────────────────────────────────────────────
+class _VerifikasiSheet extends StatelessWidget {
+  final String labelData;
+  final VoidCallback onVerify;
+  final VoidCallback onCancel;
+  const _VerifikasiSheet(
+      {required this.labelData,
+      required this.onVerify,
+      required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Handle bar
+        Container(
+          width: 40,
+          height: 4,
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2)),
+        ),
+        // Ikon
+        Container(
+          width: 64,
+          height: 64,
+          decoration: const BoxDecoration(
+              color: AppColors.primarySurface, shape: BoxShape.circle),
+          child: const Icon(Icons.fingerprint_rounded,
+              color: AppColors.primary, size: 36),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Verifikasi Diperlukan',
+          style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Gunakan sidik jari atau PIN HP untuk\nmenampilkan $labelData yang tersembunyi',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 13, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 24),
+        // Tombol verifikasi
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: onVerify,
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            icon: const Icon(Icons.fingerprint_rounded,
+                color: Colors.white, size: 22),
+            label: const Text('Verifikasi Sekarang',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Tombol batal
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: onCancel,
+            child: const Text('Batal',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 14)),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ───── Accordion Anggota ────────────────────────────────────────────────────
 class _AnggotaAccordion extends StatelessWidget {
   final WargaModel warga;
   final bool isUnhidden, isExpanded;
@@ -298,21 +396,18 @@ class _AnggotaAccordion extends StatelessWidget {
                       '${warga.tanggalLahir} (${warga.umur} thn)'),
                   _row('Kategori Usia', warga.kategoriUsia),
                   _row('Jenis Kelamin', warga.jenisKelamin),
-                  _row('RT / RW',
-                      'RT ${warga.rt} / RW ${warga.rw}'),
+                  _row('RT / RW', 'RT ${warga.rt} / RW ${warga.rw}'),
                   if (warga.statusPendidikan != null &&
                       warga.statusPendidikan!.isNotEmpty)
                     _row('Pendidikan', warga.statusPendidikan!),
-                  if (warga.pekerjaan != null &&
-                      warga.pekerjaan!.isNotEmpty)
+                  if (warga.pekerjaan != null && warga.pekerjaan!.isNotEmpty)
                     _row('Pekerjaan', warga.pekerjaan!),
                   const SizedBox(height: 10),
                   Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                     OutlinedButton.icon(
                       onPressed: onEdit,
                       style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                              color: AppColors.primary),
+                          side: const BorderSide(color: AppColors.primary),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6)),
                       icon: const Icon(Icons.edit_rounded,
@@ -325,15 +420,13 @@ class _AnggotaAccordion extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: onDelete,
                       style: OutlinedButton.styleFrom(
-                          side:
-                              const BorderSide(color: Colors.red),
+                          side: const BorderSide(color: Colors.red),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6)),
                       icon: const Icon(Icons.delete_rounded,
                           size: 16, color: Colors.red),
                       label: const Text('Hapus',
-                          style: TextStyle(
-                              color: Colors.red, fontSize: 12)),
+                          style: TextStyle(color: Colors.red, fontSize: 12)),
                     ),
                   ]),
                 ]),

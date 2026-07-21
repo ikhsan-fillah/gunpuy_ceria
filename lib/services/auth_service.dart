@@ -48,7 +48,7 @@ class AuthService {
     }
   }
 
-  /// Return: null = sukses, String = pesan error
+  /// Login fingerprint — return null jika sukses, String jika error
   Future<String?> loginWithFingerprint() async {
     try {
       if (!await isBiometricAvailable()) {
@@ -57,7 +57,7 @@ class AuthService {
       final bool ok = await _localAuth.authenticate(
         localizedReason: 'Gunakan sidik jari untuk masuk ke Gunpuy Ceria',
         options: const AuthenticationOptions(
-          biometricOnly: false, // false = boleh fallback ke PIN HP
+          biometricOnly: false,
           stickyAuth: true,
           sensitiveTransaction: false,
         ),
@@ -82,6 +82,38 @@ class AuthService {
       return 'Error: ${e.message}';
     } catch (e) {
       return 'Terjadi kesalahan: $e';
+    }
+  }
+
+  /// Verifikasi untuk unhide data sensitif
+  /// Return: null = sukses, String = pesan error
+  Future<String?> verifyForUnhide() async {
+    try {
+      final bool deviceSupport = await _localAuth.isDeviceSupported();
+      if (!deviceSupport) return null; // device lama, langsung izinkan
+
+      final bool ok = await _localAuth.authenticate(
+        localizedReason:
+            'Verifikasi identitas untuk melihat data sensitif (NIK/NOP)',
+        options: const AuthenticationOptions(
+          biometricOnly: false, // bisa fallback ke PIN/password HP
+          stickyAuth: true,
+          sensitiveTransaction: true,
+        ),
+      );
+      if (ok) return null; // sukses
+      return 'Verifikasi dibatalkan';
+    } on PlatformException catch (e) {
+      if (e.code == auth_error.passcodeNotSet) {
+        return 'Aktifkan kunci layar di Pengaturan terlebih dahulu';
+      } else if (e.code == auth_error.lockedOut) {
+        return 'Terlalu banyak percobaan. Coba lagi sebentar';
+      } else if (e.code == auth_error.permanentlyLockedOut) {
+        return 'Terkunci. Buka HP dengan PIN/password terlebih dahulu';
+      }
+      return null; // error lain, fallback izinkan
+    } catch (_) {
+      return null; // fallback
     }
   }
 }
