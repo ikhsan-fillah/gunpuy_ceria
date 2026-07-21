@@ -39,6 +39,8 @@ class _SpptPageState extends State<SpptPage> {
     final raw = await _db.getAllSPPT(
         orderBy: '$_sortColumn ${_sortAscending ? 'ASC' : 'DESC'}');
     final data = raw.map((m) => SpptModel.fromMap(m)).toList();
+    // Sort numerik berdasarkan nomor petak
+    data.sort((a, b) => a.nomorPetakInt.compareTo(b.nomorPetakInt));
     if (mounted)
       setState(() {
         _allData = data;
@@ -58,7 +60,7 @@ class _SpptPageState extends State<SpptPage> {
       _filteredData = _allData
           .where((s) =>
               s.namaPemilik.toLowerCase().contains(q) ||
-              s.nop.toLowerCase().contains(q) ||
+              (s.nop ?? '').toLowerCase().contains(q) ||
               s.nomorPetak.toLowerCase().contains(q))
           .toList();
     });
@@ -153,8 +155,10 @@ class _SpptPageState extends State<SpptPage> {
     );
   }
 
-  String _maskNOP(String nop) =>
-      _isUnhidden ? nop : MaskingHelper.maskNOP(nop);
+  String _maskNOP(String? nop) {
+    if (nop == null || nop.isEmpty) return '-';
+    return _isUnhidden ? nop : MaskingHelper.maskNOP(nop);
+  }
 
   Future<void> _deleteSppt(SpptModel sppt) async {
     final bool confirm = await showDialog<bool>(
@@ -193,20 +197,22 @@ class _SpptPageState extends State<SpptPage> {
       appBar: AppBar(
         title: const Text(AppStrings.spptTitle),
         actions: [
-          TextButton.icon(
-            onPressed: _toggleUnhide,
-            icon: Icon(
-                _isUnhidden
-                    ? Icons.lock_open_rounded
-                    : Icons.lock_rounded,
-                color: Colors.white,
-                size: 18),
-            label: Text(
-                _isUnhidden
-                    ? AppStrings.btnHide
-                    : AppStrings.btnUnhide,
-                style: const TextStyle(color: Colors.white)),
-          ),
+          // Hanya tampilkan tombol unhide jika ada data NOP
+          if (_allData.any((s) => s.nop != null && s.nop!.isNotEmpty))
+            TextButton.icon(
+              onPressed: _toggleUnhide,
+              icon: Icon(
+                  _isUnhidden
+                      ? Icons.lock_open_rounded
+                      : Icons.lock_rounded,
+                  color: Colors.white,
+                  size: 18),
+              label: Text(
+                  _isUnhidden
+                      ? AppStrings.btnHide
+                      : AppStrings.btnUnhide,
+                  style: const TextStyle(color: Colors.white)),
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -231,13 +237,14 @@ class _SpptPageState extends State<SpptPage> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Header peta
                       Row(
                           mainAxisAlignment:
                               MainAxisAlignment.spaceBetween,
                           children: [
                             const _SectionHeader(
                                 title: 'Peta Bidang Tanah',
-                                subtitle: 'Peta asli dari Pak Kadus'),
+                                subtitle: 'Kalurahan Srikayangan Blok 013'),
                             IconButton(
                                 icon: const Icon(
                                     Icons.edit_rounded,
@@ -246,6 +253,8 @@ class _SpptPageState extends State<SpptPage> {
                                 onPressed: _showPetaOptions),
                           ]),
                       const SizedBox(height: 10),
+
+                      // Gambar peta
                       GestureDetector(
                         onTap: _petaImagePath != null
                             ? () => Navigator.push(
@@ -260,8 +269,7 @@ class _SpptPageState extends State<SpptPage> {
                                                 MaterialPageRoute(
                                                     builder: (_) =>
                                                         FormSpptPage(
-                                                            sppt:
-                                                                sppt)));
+                                                            sppt: sppt)));
                                             _loadData();
                                           },
                                         )))
@@ -326,7 +334,8 @@ class _SpptPageState extends State<SpptPage> {
                                             color: AppColors.primaryLight
                                                 .withOpacity(0.5)),
                                         const SizedBox(height: 8),
-                                        const Text('Belum ada gambar peta',
+                                        const Text(
+                                            'Belum ada gambar peta',
                                             style: TextStyle(
                                                 fontSize: 13,
                                                 color: AppColors
@@ -357,6 +366,8 @@ class _SpptPageState extends State<SpptPage> {
                               fontSize: 11,
                               color: AppColors.textSecondary)),
                       const SizedBox(height: 16),
+
+                      // Legenda — urut numerik 1, 2, 3...
                       if (_allData.isNotEmpty) ...[
                         Text(AppStrings.spptLegendTitle,
                             style: const TextStyle(
@@ -367,11 +378,15 @@ class _SpptPageState extends State<SpptPage> {
                         _buildLegenda(),
                         const SizedBox(height: 20),
                       ],
+
+                      // Header tabel
                       _SectionHeader(
                           title: 'Data SPPT',
                           subtitle:
-                              '${_allData.length} objek pajak terdata'),
+                              '${_allData.length} bidang tanah terdata'),
                       const SizedBox(height: 10),
+
+                      // Search
                       TextField(
                         controller: _searchCtrl,
                         decoration: InputDecoration(
@@ -387,6 +402,7 @@ class _SpptPageState extends State<SpptPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
+
                       _allData.isEmpty
                           ? Center(
                               child: Padding(
@@ -413,7 +429,9 @@ class _SpptPageState extends State<SpptPage> {
     );
   }
 
+  /// Legenda diurutkan numerik: 1, 2, 3, ..., 155
   Widget _buildLegenda() {
+    // sudah terurut numerik dari _loadData
     final int mid = (_allData.length / 2).ceil();
     return Container(
       padding: const EdgeInsets.all(12),
@@ -432,14 +450,13 @@ class _SpptPageState extends State<SpptPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children:
                     _allData.sublist(0, mid).map(_legendaItem).toList())),
-        if (_allData.length > mid) ...[
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children:
-                      _allData.sublist(mid).map(_legendaItem).toList())),
-        ],
+        const SizedBox(width: 12),
+        Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _allData.length > mid
+                    ? _allData.sublist(mid).map(_legendaItem).toList()
+                    : [])),
       ]),
     );
   }
@@ -448,15 +465,15 @@ class _SpptPageState extends State<SpptPage> {
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
           Container(
-              width: 22,
-              height: 22,
+              width: 24,
+              height: 24,
               decoration: const BoxDecoration(
                   color: AppColors.primary, shape: BoxShape.circle),
               alignment: Alignment.center,
               child: Text(s.nomorPetak,
                   style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.bold))),
           const SizedBox(width: 6),
           Expanded(
@@ -468,6 +485,9 @@ class _SpptPageState extends State<SpptPage> {
       );
 
   Widget _buildTabel() {
+    // Cek apakah ada data yang punya NOP
+    final bool adaNOP = _allData.any((s) => s.nop != null && s.nop!.isNotEmpty);
+
     return Container(
       decoration: BoxDecoration(
           color: Colors.white,
@@ -479,6 +499,7 @@ class _SpptPageState extends State<SpptPage> {
                 offset: const Offset(0, 2))
           ]),
       child: Column(children: [
+        // Header tabel
         Container(
           padding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -487,26 +508,13 @@ class _SpptPageState extends State<SpptPage> {
               borderRadius:
                   BorderRadius.vertical(top: Radius.circular(10))),
           child: Row(children: [
-            Expanded(
-                flex: 3,
-                child: GestureDetector(
-                    onTap: () => _onSort('nop'),
-                    child: Row(children: [
-                      const Text('NOP',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13)),
-                      const SizedBox(width: 4),
-                      Icon(
-                          _sortColumn == 'nop'
-                              ? (_sortAscending
-                                  ? Icons.arrow_upward_rounded
-                                  : Icons.arrow_downward_rounded)
-                              : Icons.unfold_more_rounded,
-                          color: Colors.white70,
-                          size: 14),
-                    ]))),
+            const SizedBox(
+                width: 36,
+                child: Text('No.',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13))),
             Expanded(
                 flex: 4,
                 child: GestureDetector(
@@ -527,9 +535,32 @@ class _SpptPageState extends State<SpptPage> {
                           color: Colors.white70,
                           size: 14),
                     ]))),
-            const SizedBox(width: 48),
+            if (adaNOP)
+              Expanded(
+                  flex: 3,
+                  child: GestureDetector(
+                      onTap: () => _onSort('nop'),
+                      child: Row(children: [
+                        const Text('NOP',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13)),
+                        const SizedBox(width: 4),
+                        Icon(
+                            _sortColumn == 'nop'
+                                ? (_sortAscending
+                                    ? Icons.arrow_upward_rounded
+                                    : Icons.arrow_downward_rounded)
+                                : Icons.unfold_more_rounded,
+                            color: Colors.white70,
+                            size: 14),
+                      ]))),
+            const SizedBox(width: 36),
           ]),
         ),
+
+        // Baris data
         ..._filteredData.asMap().entries.map((entry) {
           final int idx = entry.key;
           final SpptModel s = entry.value;
@@ -547,24 +578,43 @@ class _SpptPageState extends State<SpptPage> {
                       color: AppColors.primarySurface, width: 0.5)),
             ),
             child: Row(children: [
-              Expanded(
-                  flex: 3,
-                  child: Text(_maskNOP(s.nop),
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: _isUnhidden
-                              ? AppColors.textPrimary
-                              : AppColors.masked,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: _isUnhidden ? 0 : 0.5))),
+              // Nomor petak di lingkaran
+              SizedBox(
+                width: 36,
+                child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                        color: AppColors.primary, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: Text(s.nomorPetak,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold))),
+              ),
+              // Nama pemilik
               Expanded(
                   flex: 4,
                   child: Text(s.namaPemilik,
                       style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textPrimary))),
+              // NOP (hanya tampil kalau ada data NOP)
+              if (adaNOP)
+                Expanded(
+                    flex: 3,
+                    child: Text(_maskNOP(s.nop),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: _isUnhidden
+                                ? AppColors.textPrimary
+                                : AppColors.masked,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: _isUnhidden ? 0 : 0.5))),
+              // Menu edit/hapus
               SizedBox(
-                  width: 48,
+                  width: 36,
                   child: PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert_rounded,
                         color: AppColors.textSecondary, size: 18),

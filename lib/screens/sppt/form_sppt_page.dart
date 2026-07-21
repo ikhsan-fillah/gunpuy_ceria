@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../constants/app_colors.dart';
-import '../../../constants/app_strings.dart';
-import '../../../database/database_helper.dart';
-import '../../../models/sppt_model.dart';
+import '../../constants/app_colors.dart';
+import '../../constants/app_strings.dart';
+import '../../database/database_helper.dart';
+import '../../models/sppt_model.dart';
 
 class FormSpptPage extends StatefulWidget {
   final SpptModel? sppt;
@@ -27,12 +27,22 @@ class _FormSpptPageState extends State<FormSpptPage> {
   }
 
   @override
-  void dispose() { _nomorPetakCtrl.dispose(); _nopCtrl.dispose(); _namaPemilikCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _nomorPetakCtrl.dispose();
+    _nopCtrl.dispose();
+    _namaPemilikCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
-    final data = SpptModel(id: widget.sppt?.id, nomorPetak: _nomorPetakCtrl.text.trim(), nop: _nopCtrl.text.trim(), namaPemilik: _namaPemilikCtrl.text.trim());
+    final data = SpptModel(
+      id: widget.sppt?.id,
+      nomorPetak: _nomorPetakCtrl.text.trim(),
+      nop: _nopCtrl.text.trim().isEmpty ? null : _nopCtrl.text.trim(),
+      namaPemilik: _namaPemilikCtrl.text.trim(),
+    );
     try {
       if (isEdit) {
         await _db.updateSPPT(widget.sppt!.id!, data.toMap());
@@ -42,10 +52,13 @@ class _FormSpptPageState extends State<FormSpptPage> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Nomor petak ${_nomorPetakCtrl.text} sudah digunakan'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Nomor petak ${_nomorPetakCtrl.text} sudah digunakan'),
+            backgroundColor: Colors.red));
       }
-    } finally { if (mounted) setState(() => _isSaving = false); }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -57,44 +70,83 @@ class _FormSpptPageState extends State<FormSpptPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Info banner
             Container(
-              width: double.infinity, padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(10)),
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(10)),
               child: Row(children: [
-                const Icon(Icons.info_outline_rounded, color: AppColors.primaryLight, size: 18),
+                const Icon(Icons.info_outline_rounded,
+                    color: AppColors.primaryLight, size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text(
-                  isEdit ? 'Edit data petak ${widget.sppt?.nomorPetak}' : 'Data ini akan muncul di legenda peta dan tabel SPPT',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                Expanded(
+                    child: Text(
+                  isEdit
+                      ? 'Edit data petak ${widget.sppt?.nomorPetak}'
+                      : 'Data ini akan muncul di legenda peta dan tabel SPPT',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                )),
               ]),
             ),
             const SizedBox(height: 20),
-            _lbl(AppStrings.labelNomorPetak), const SizedBox(height: 6),
+
+            // Nomor Petak
+            _lbl('Nomor Petak'), const SizedBox(height: 6),
             TextFormField(
-              controller: _nomorPetakCtrl, keyboardType: TextInputType.number, readOnly: isEdit,
-              decoration: InputDecoration(hintText: 'Contoh: 1, 2, 3...', filled: true, fillColor: isEdit ? AppColors.primarySurface : Colors.white),
-              validator: (v) => (v == null || v.isEmpty) ? 'Nomor petak wajib diisi' : null,
+              controller: _nomorPetakCtrl,
+              keyboardType: TextInputType.number,
+              readOnly: isEdit,
+              decoration: InputDecoration(
+                hintText: 'Nomor sesuai peta (contoh: 1, 13, 70)',
+                filled: true,
+                fillColor: isEdit ? AppColors.primarySurface : Colors.white,
+              ),
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Nomor petak wajib diisi' : null,
             ),
             const SizedBox(height: 16),
-            _lbl(AppStrings.labelNOP), const SizedBox(height: 6),
+
+            // Nama Pemilik — field utama
+            _lbl('Nama Pemilik'), const SizedBox(height: 6),
             TextFormField(
-              controller: _nopCtrl, keyboardType: TextInputType.number,
-              decoration: const InputDecoration(hintText: 'Nomor Objek Pajak (dari dokumen SPPT)'),
-              validator: (v) => (v == null || v.isEmpty) ? 'NOP wajib diisi' : null,
+              controller: _namaPemilikCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                  hintText: 'Nama pemilik bidang tanah'),
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Nama pemilik wajib diisi' : null,
             ),
             const SizedBox(height: 16),
-            _lbl(AppStrings.labelNamaPemilik), const SizedBox(height: 6),
+
+            // NOP — opsional
+            _lbl('NOP (Opsional)'), const SizedBox(height: 6),
             TextFormField(
-              controller: _namaPemilikCtrl, textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(hintText: 'Nama sesuai dokumen SPPT'),
-              validator: (v) => (v == null || v.isEmpty) ? 'Nama pemilik wajib diisi' : null,
+              controller: _nopCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: 'Nomor Objek Pajak — boleh dikosongkan',
+                helperText: 'Isi jika tersedia di dokumen SPPT',
+              ),
+              // Tidak ada validator — opsional
             ),
             const SizedBox(height: 28),
+
+            // Tombol simpan
             ElevatedButton(
               onPressed: _isSaving ? null : _save,
               child: _isSaving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text(isEdit ? 'Simpan Perubahan' : 'Tambah Data SPPT', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : Text(
+                      isEdit ? 'Simpan Perubahan' : 'Tambah Data SPPT',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 16),
           ]),
@@ -103,5 +155,9 @@ class _FormSpptPageState extends State<FormSpptPage> {
     );
   }
 
-  Widget _lbl(String t) => Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary));
+  Widget _lbl(String t) => Text(t,
+      style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textPrimary));
 }
