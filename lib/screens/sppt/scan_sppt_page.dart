@@ -25,7 +25,8 @@ class _ScanItem {
 }
 
 class ScanSpptPage extends StatefulWidget {
-  const ScanSpptPage({super.key});
+  final String blokId;
+  const ScanSpptPage({super.key, required this.blokId});
   @override
   State<ScanSpptPage> createState() => _ScanSpptPageState();
 }
@@ -79,7 +80,7 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
 
       final List<_ScanItem> parsed = _parseOcrResult(recognized.text);
 
-      // Cek duplikat di DB — by NOP (bukan nama)
+      // Cek duplikat di DB — by NOP
       for (final item in parsed) {
         final existing = await _db.getSPPTByNop(item.nop);
         if (existing != null) {
@@ -110,40 +111,20 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
   }
 
   // ─── Parser hasil OCR ─────────────────────────────────────────────────────
-  //
-  // Pola tabel SPPT:
-  //   [No] | [NOP 34.01.060.002.013.XXXX.X] | [Tahun] | [Nama Pemilik] | [Alamat]
-  //
-  // Masalah umum OCR:
-  //   1. Nama pendek (JUNI, KINAH) dianggap kosong oleh threshold lama
-  //   2. Nama bergelar (DRS. H. GONDO SUHADYO, M.SI) tersebar di 2 baris
-  //   3. Kolom alamat (DK KARA...) ikut terbaca sebagai bagian nama
-  //   4. Titik/koma di nama gelar ikut dihapus
-  //
-  // Strategi baru:
-  //   - Setelah NOP + tahun, ambil token hingga terdeteksi pola alamat (DK, KP, JL, dll)
-  //   - Jika nama di baris sama kosong, lihat baris berikutnya (max 2 baris)
-  //   - Gabung baris lanjutan selama bukan NOP baru / bukan pola alamat
-  //   - Threshold nama diturunkan: minimal 2 karakter huruf
-
-  // Pola awalan alamat yang umum di data SPPT Jawa
   static final RegExp _alamatPrefixRegex = RegExp(
     r'\b(DK|RT|RW|KP|KM|JL|JLN|DESA|DUSUN|KEL|KELURAHAN|GG|GANG|BLOK|PERUM|PERENG|GAMPINGAN|SUMUR|TEBING|SECANG|KRADENON|KARANG)\b',
     caseSensitive: false,
   );
 
-  // NOP regex — toleran terhadap spasi di antara segmen
   static final RegExp _nopRegex = RegExp(
     r'(\d{2}[.\s]\d{2}[.\s]\d{3}[.\s]\d{3}[.\s]\d{3}[.\s]\d{4}[.\s]\d)',
   );
 
-  // Pola header/footer tabel
   static final RegExp _headerRegex = RegExp(
     r'^\s*(No\.?|NOP|Nama\s+Pemilik|Tahun|Blok|Total|Ketetapan|PBB)\s*$',
     caseSensitive: false,
   );
 
-  // Pola baris yang hanya angka (nomor urut)
   static final RegExp _nomorUrut = RegExp(r'^\d{1,4}$');
 
   List<_ScanItem> _parseOcrResult(String rawText) {
@@ -155,32 +136,21 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
       final match = _nopRegex.firstMatch(line);
       if (match == null) continue;
 
-      // Normalisasi NOP
       final String nop =
           match.group(1)!.replaceAll(RegExp(r'\s+'), '');
       final String nomorPetak = _parseNomorPetak(nop);
 
-      // Skip duplikat NOP dalam hasil scan
       if (result.any((e) => e.nop == nop)) continue;
 
-      // ── Step 1: Ambil sisa baris setelah NOP ───────────────────────────
       String sisaBaris = line.substring(match.end).trim();
-
-      // Hapus tahun 4 digit di awal (misal "2026")
       sisaBaris =
           sisaBaris.replaceFirst(RegExp(r'^\s*20\d{2}\s*'), '').trim();
-
-      // Hapus nomor urut / pipe / bracket di awal
       sisaBaris =
           sisaBaris.replaceFirst(RegExp(r'^[\d\s|.\[\]{}]+'), '').trim();
-
-      // Potong di kolom alamat (ambil hanya sebelum pola alamat)
       sisaBaris = _potongSebelumAlamat(sisaBaris);
 
       String nama = sisaBaris.trim();
 
-      // ── Step 2: Jika nama di baris ini kosong/tidak ada huruf,
-      //           lihat baris berikutnya ───────────────────────────────────
       if (!_mengandungHurufCukup(nama)) {
         for (int j = i + 1; j <= i + 2 && j < lines.length; j++) {
           final next = lines[j];
@@ -196,8 +166,6 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
         }
       }
 
-      // ── Step 3: Cek apakah baris berikutnya adalah lanjutan nama
-      //           (kasus nama 2 baris: DRS. H. GONDO SUHADYO / M.SI) ──────
       if (_mengandungHurufCukup(nama)) {
         for (int j = i + 1; j <= i + 2 && j < lines.length; j++) {
           final next = lines[j];
@@ -207,13 +175,9 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
 
           final lanjutan = _potongSebelumAlamat(next).trim();
 
-          // Lanjutan valid: mengandung huruf, tidak ada angka banyak,
-          // dan tidak terlihat seperti baris NOP / header baru
           if (_mengandungHurufCukup(lanjutan) &&
               !lanjutan.contains(RegExp(r'\d{4}')) &&
               !_alamatPrefixRegex.hasMatch(lanjutan)) {
-            // Hanya gabung jika lanjutan ini pendek (kemungkinan gelar/suffix)
-            // atau nama saat ini masih pendek
             if (lanjutan.split(' ').length <= 4 || nama.split(' ').length <= 2) {
               nama = '$nama $lanjutan'.trim();
               break;
@@ -222,7 +186,6 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
         }
       }
 
-      // ── Step 4: Normalisasi nama akhir ────────────────────────────────
       nama = _normalizeNama(nama);
       if (nama.isEmpty) continue;
 
@@ -240,39 +203,24 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
     return result;
   }
 
-  /// Potong string di titik kemunculan pola alamat pertama.
-  /// Contoh: "GIMAN DK GUNUNGSARI" → "GIMAN"
   String _potongSebelumAlamat(String s) {
     final m = _alamatPrefixRegex.firstMatch(s);
     if (m == null) return s;
-    // Hanya potong jika pola alamat bukan di awal baris
-    // (supaya baris yang MEMANG isinya alamat tidak jadi nama kosong)
     if (m.start == 0) return '';
     return s.substring(0, m.start).trim();
   }
 
-  /// Cek apakah string mengandung minimal 2 huruf berurutan
   bool _mengandungHurufCukup(String s) {
     return RegExp(r'[A-Za-z]{2,}').hasMatch(s.trim());
   }
 
-  /// Normalisasi nama akhir:
-  /// - Pertahankan titik dan koma (untuk gelar: DRS., H., M.SI)
-  /// - Hapus angka di awal/akhir
-  /// - Uppercase
   String _normalizeNama(String nama) {
-    // Hapus angka di awal (nomor urut yang nyempil)
     String r = nama.replaceFirst(RegExp(r'^[\d\s|]+'), '');
-    // Hapus karakter aneh selain huruf, spasi, titik, koma, tanda hubung, apostrof
     r = r.replaceAll(RegExp(r"[^\w\s.,\-']"), '');
-    // Hapus angka di akhir
     r = r.replaceAll(RegExp(r'[\d]+$'), '');
-    // Normalisasi spasi
     r = r.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
-    // Buang jika hasil adalah kata header tabel saja
     if (RegExp(r'^(NOP|NAMA|TAHUN|BLOK|NO|TOTAL|KETETAPAN|PBB)\.?$')
         .hasMatch(r)) return '';
-    // Minimal 2 huruf
     if (!RegExp(r'[A-Z]{2}').hasMatch(r)) return '';
     return r;
   }
@@ -301,7 +249,8 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
       _statusText = 'Menyimpan data...';
     });
 
-    final result = await _db.importScanSPPT(selected);
+    // Kirim blokId ke importScanSPPT
+    final result = await _db.importScanSPPT(selected, widget.blokId);
 
     setState(() {
       _isProcessing = false;
@@ -315,7 +264,7 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan Import SPPT'),
+        title: Text('Scan Import SPPT — Blok ${widget.blokId}'),
         actions: [
           if (_items.isNotEmpty && !_isDone)
             TextButton(
@@ -364,9 +313,9 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
                   const Icon(Icons.document_scanner_rounded,
                       size: 64, color: AppColors.primary),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Scan Data SPPT',
-                    style: TextStyle(
+                  Text(
+                    'Scan Data SPPT — Blok ${widget.blokId}',
+                    style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary),

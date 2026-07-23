@@ -13,7 +13,13 @@ import 'form_sppt_page.dart';
 import 'scan_sppt_page.dart';
 
 class SpptPage extends StatefulWidget {
-  const SpptPage({super.key});
+  final String blokId;
+  final String blokLabel;
+  const SpptPage({
+    super.key,
+    required this.blokId,
+    required this.blokLabel,
+  });
   @override
   State<SpptPage> createState() => _SpptPageState();
 }
@@ -40,7 +46,9 @@ class _SpptPageState extends State<SpptPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final raw = await _db.getAllSPPT(
-        orderBy: '$_sortColumn ${_sortAscending ? 'ASC' : 'DESC'}');
+      blokId: widget.blokId,
+      orderBy: '$_sortColumn ${_sortAscending ? 'ASC' : 'DESC'}',
+    );
     final data = raw.map((m) => SpptModel.fromMap(m)).toList();
     data.sort((a, b) => a.nomorPetakInt.compareTo(b.nomorPetakInt));
     if (mounted)
@@ -207,9 +215,8 @@ class _SpptPageState extends State<SpptPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppStrings.spptTitle),
+        title: Text('SPPT ${widget.blokLabel}'),
         actions: [
-          // Tombol Scan Import
           IconButton(
             icon: const Icon(Icons.document_scanner_rounded,
                 color: Colors.white),
@@ -218,7 +225,8 @@ class _SpptPageState extends State<SpptPage> {
               final result = await Navigator.push<bool>(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const ScanSpptPage()));
+                      builder: (_) =>
+                          ScanSpptPage(blokId: widget.blokId)));
               if (result == true) _loadData();
             },
           ),
@@ -255,8 +263,11 @@ class _SpptPageState extends State<SpptPage> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
-          await Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const FormSpptPage()));
+          await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      FormSpptPage(blokId: widget.blokId)));
           _loadData();
         },
         child: const Icon(Icons.add_rounded),
@@ -274,9 +285,10 @@ class _SpptPageState extends State<SpptPage> {
                       Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const _SectionHeader(
+                            _SectionHeader(
                                 title: 'Peta Bidang Tanah',
-                                subtitle: 'Kalurahan Srikayangan Blok 013'),
+                                subtitle:
+                                    'Kalurahan Srikayangan ${widget.blokLabel}'),
                             IconButton(
                                 icon: const Icon(Icons.edit_rounded,
                                     color: AppColors.primaryLight, size: 20),
@@ -296,6 +308,7 @@ class _SpptPageState extends State<SpptPage> {
                                                 context,
                                                 MaterialPageRoute(
                                                     builder: (_) => FormSpptPage(
+                                                        blokId: widget.blokId,
                                                         sppt: sppt)));
                                             _loadData();
                                           },
@@ -429,7 +442,9 @@ class _SpptPageState extends State<SpptPage> {
                                                 context,
                                                 MaterialPageRoute(
                                                     builder: (_) =>
-                                                        const ScanSpptPage()));
+                                                        ScanSpptPage(
+                                                            blokId:
+                                                                widget.blokId)));
                                         if (result == true) _loadData();
                                       },
                                       style: OutlinedButton.styleFrom(
@@ -635,7 +650,8 @@ class _SpptPageState extends State<SpptPage> {
                         await Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => FormSpptPage(sppt: s)));
+                                builder: (_) => FormSpptPage(
+                                    blokId: widget.blokId, sppt: s)));
                         _loadData();
                       } else if (value == 'delete') {
                         _deleteSppt(s);

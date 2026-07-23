@@ -21,7 +21,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'data_warga_gunung_puyuh.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -50,14 +50,17 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE sppt (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nomor_petak TEXT NOT NULL UNIQUE,
+        blok_id TEXT NOT NULL DEFAULT '013',
+        nomor_petak TEXT NOT NULL,
         nop TEXT NOT NULL,
         nama_pemilik TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(blok_id, nomor_petak)
       )
     ''');
     await db.execute('CREATE INDEX idx_sppt_nama ON sppt(nama_pemilik)');
+    await db.execute('CREATE INDEX idx_sppt_blok ON sppt(blok_id)');
 
     await db.execute('''
       CREATE TABLE user (
@@ -92,6 +95,34 @@ class DatabaseHelper {
         'username': 'ikhsan',
         'password_hash': sha256.convert(utf8.encode('ikhsan21')).toString(),
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+    if (oldVersion < 4) {
+      // 1. Tambah kolom blok_id, data lama otomatis dapat '013'
+      await db.execute(
+          "ALTER TABLE sppt ADD COLUMN blok_id TEXT NOT NULL DEFAULT '013'");
+
+      // 2. Hapus UNIQUE lama pada nomor_petak (SQLite tidak support DROP CONSTRAINT)
+      //    → Recreate tabel sppt dengan constraint baru
+      await db.execute('''
+        CREATE TABLE sppt_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          blok_id TEXT NOT NULL DEFAULT '013',
+          nomor_petak TEXT NOT NULL,
+          nop TEXT NOT NULL,
+          nama_pemilik TEXT NOT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(blok_id, nomor_petak)
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO sppt_new (id, blok_id, nomor_petak, nop, nama_pemilik, created_at, updated_at)
+        SELECT id, blok_id, nomor_petak, nop, nama_pemilik, created_at, updated_at FROM sppt
+      ''');
+      await db.execute('DROP TABLE sppt');
+      await db.execute('ALTER TABLE sppt_new RENAME TO sppt');
+      await db.execute('CREATE INDEX idx_sppt_nama ON sppt(nama_pemilik)');
+      await db.execute('CREATE INDEX idx_sppt_blok ON sppt(blok_id)');
     }
   }
 
@@ -207,26 +238,33 @@ class DatabaseHelper {
     return await db.delete('sppt', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<List<Map<String, dynamic>>> getAllSPPT(
-      {String orderBy = 'nomor_petak ASC'}) async {
-    final db = await database;
-    return await db.query('sppt', orderBy: orderBy);
-  }
-
-  Future<List<Map<String, dynamic>>> searchSPPTByNama(String keyword) async {
+  /// Semua SPPT dalam satu blok
+  Future<List<Map<String, dynamic>>> getAllSPPT({
+    required String blokId,
+    String orderBy = 'nomor_petak ASC',
+  }) async {
     final db = await database;
     return await db.query('sppt',
-        where: 'nama_pemilik LIKE ?', whereArgs: ['%$keyword%']);
+        where: 'blok_id = ?', whereArgs: [blokId], orderBy: orderBy);
   }
 
-  Future<List<Map<String, dynamic>>> searchSPPT(String keyword) async {
+  Future<List<Map<String, dynamic>>> searchSPPTByNama(
+      String keyword, String blokId) async {
     final db = await database;
     return await db.query('sppt',
-        where: 'nama_pemilik LIKE ? OR nop LIKE ?',
-        whereArgs: ['%$keyword%', '%$keyword%']);
+        where: 'blok_id = ? AND nama_pemilik LIKE ?',
+        whereArgs: [blokId, '%$keyword%']);
   }
 
-  /// Cari satu record SPPT berdasarkan NOP
+  Future<List<Map<String, dynamic>>> searchSPPT(
+      String keyword, String blokId) async {
+    final db = await database;
+    return await db.query('sppt',
+        where:
+            'blok_id = ? AND (nama_pemilik LIKE ? OR nop LIKE ?)',
+        whereArgs: [blokId, '%$keyword%', '%$keyword%']);
+  }
+
   Future<Map<String, dynamic>?> getSPPTByNop(String nop) async {
     final db = await database;
     final result =
@@ -234,18 +272,21 @@ class DatabaseHelper {
     return result.isNotEmpty ? result.first : null;
   }
 
-  /// Cari satu record SPPT berdasarkan nomor_petak
-  Future<Map<String, dynamic>?> getSPPTByNomorPetak(String nomorPetak) async {
+  /// Cari berdasarkan blokId + nomor_petak
+  Future<Map<String, dynamic>?> getSPPTByBlokDanPetak(
+      String blokId, String nomorPetak) async {
     final db = await database;
     final result = await db.query('sppt',
-        where: 'nomor_petak = ?', whereArgs: [nomorPetak], limit: 1);
+        where: 'blok_id = ? AND nomor_petak = ?',
+        whereArgs: [blokId, nomorPetak],
+        limit: 1);
     return result.isNotEmpty ? result.first : null;
   }
 
   /// Import batch dari hasil scan OCR.
-  /// Return: map berisi jumlah inserted, updated, skipped
+  /// Memerlukan blokId agar UNIQUE constraint (blok_id, nomor_petak) terpenuhi.
   Future<Map<String, int>> importScanSPPT(
-      List<Map<String, String>> items) async {
+      List<Map<String, String>> items, String blokId) async {
     final db = await database;
     int inserted = 0, updated = 0, skipped = 0;
 
@@ -257,10 +298,11 @@ class DatabaseHelper {
       final existing = await getSPPTByNop(nop);
 
       if (existing == null) {
-        // Cek apakah nomor_petak sudah ada (dari input manual tanpa NOP)
-        final existingByPetak = await getSPPTByNomorPetak(nomorPetak);
+        final existingByPetak =
+            await getSPPTByBlokDanPetak(blokId, nomorPetak);
         if (existingByPetak == null) {
           await db.insert('sppt', {
+            'blok_id': blokId,
             'nomor_petak': nomorPetak,
             'nop': nop,
             'nama_pemilik': nama,
@@ -269,7 +311,6 @@ class DatabaseHelper {
           });
           inserted++;
         } else {
-          // Petak sudah ada tapi NOP belum, update NOP & nama
           await db.update(
             'sppt',
             {
@@ -285,7 +326,6 @@ class DatabaseHelper {
       } else {
         final String namaLama = existing['nama_pemilik'] as String;
         if (namaLama.trim().toUpperCase() != nama.trim().toUpperCase()) {
-          // Nama berbeda → update
           await db.update(
             'sppt',
             {

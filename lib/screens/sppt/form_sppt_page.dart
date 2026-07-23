@@ -5,8 +5,9 @@ import '../../database/database_helper.dart';
 import '../../models/sppt_model.dart';
 
 class FormSpptPage extends StatefulWidget {
+  final String blokId;
   final SpptModel? sppt;
-  const FormSpptPage({super.key, this.sppt});
+  const FormSpptPage({super.key, required this.blokId, this.sppt});
   @override
   State<FormSpptPage> createState() => _FormSpptPageState();
 }
@@ -39,6 +40,7 @@ class _FormSpptPageState extends State<FormSpptPage> {
     setState(() => _isSaving = true);
     final data = SpptModel(
       id: widget.sppt?.id,
+      blokId: widget.blokId,
       nomorPetak: _nomorPetakCtrl.text.trim(),
       nop: _nopCtrl.text.trim().isEmpty ? null : _nopCtrl.text.trim(),
       namaPemilik: _namaPemilikCtrl.text.trim(),
@@ -53,7 +55,8 @@ class _FormSpptPageState extends State<FormSpptPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Nomor petak ${_nomorPetakCtrl.text} sudah digunakan'),
+            content: Text(
+                'Nomor petak ${_nomorPetakCtrl.text} sudah digunakan di blok ini'),
             backgroundColor: Colors.red));
       }
     } finally {
@@ -64,13 +67,15 @@ class _FormSpptPageState extends State<FormSpptPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Edit Data SPPT' : 'Tambah Data SPPT')),
+      appBar: AppBar(
+          title: Text(isEdit
+              ? 'Edit Data SPPT'
+              : 'Tambah SPPT — Blok ${widget.blokId}')),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Info banner
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -84,16 +89,14 @@ class _FormSpptPageState extends State<FormSpptPage> {
                 Expanded(
                     child: Text(
                   isEdit
-                      ? 'Edit data petak ${widget.sppt?.nomorPetak}'
-                      : 'Data ini akan muncul di legenda peta dan tabel SPPT',
+                      ? 'Edit data petak ${widget.sppt?.nomorPetak} — Blok ${widget.blokId}'
+                      : 'Data ini akan muncul di legenda peta dan tabel SPPT Blok ${widget.blokId}',
                   style: const TextStyle(
                       fontSize: 12, color: AppColors.textSecondary),
                 )),
               ]),
             ),
             const SizedBox(height: 20),
-
-            // Nomor Petak
             _lbl('Nomor Petak'), const SizedBox(height: 6),
             TextFormField(
               controller: _nomorPetakCtrl,
@@ -108,8 +111,6 @@ class _FormSpptPageState extends State<FormSpptPage> {
                   (v == null || v.isEmpty) ? 'Nomor petak wajib diisi' : null,
             ),
             const SizedBox(height: 16),
-
-            // Nama Pemilik — field utama
             _lbl('Nama Pemilik'), const SizedBox(height: 6),
             TextFormField(
               controller: _namaPemilikCtrl,
@@ -120,44 +121,9 @@ class _FormSpptPageState extends State<FormSpptPage> {
                   (v == null || v.isEmpty) ? 'Nama pemilik wajib diisi' : null,
             ),
             const SizedBox(height: 16),
-
-            // NOP — opsional
             _lbl('NOP (Opsional)'), const SizedBox(height: 6),
             TextFormField(
               controller: _nopCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                hintText: 'Nomor Objek Pajak — boleh dikosongkan',
-                helperText: 'Isi jika tersedia di dokumen SPPT',
-              ),
-              // Tidak ada validator — opsional
-            ),
-            const SizedBox(height: 28),
-
-            // Tombol simpan
-            ElevatedButton(
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(
-                      isEdit ? 'Simpan Perubahan' : 'Tambah Data SPPT',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 16),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _lbl(String t) => Text(t,
-      style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textPrimary));
-}
+                hintText: 'Nomor Objek Pajak — boleh dikoso
