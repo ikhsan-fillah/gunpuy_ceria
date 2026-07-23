@@ -42,8 +42,6 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
   Map<String, int> _importResult = {};
 
   // ─── Parse NOP → nomor petak ──────────────────────────────────────────────
-  // Format: 34.01.060.002.013.0001.0
-  // Segment ke-6 (index 5) = nomor urut petak
   String _parseNomorPetak(String nop) {
     final clean = nop.replaceAll(' ', '');
     final parts = clean.split('.');
@@ -82,22 +80,18 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
       final List<_ScanItem> parsed = _parseOcrResult(recognized.text);
 
       // Cek duplikat di DB — by NOP (bukan nama)
-      // 1 orang bisa punya banyak NOP, jadi duplikat = NOP yang sama
       for (final item in parsed) {
         final existing = await _db.getSPPTByNop(item.nop);
         if (existing != null) {
           final namaLama = existing['nama_pemilik'] as String;
           if (namaLama.trim().toUpperCase() !=
               item.namaPemilik.trim().toUpperCase()) {
-            // NOP sama, nama berbeda → tandai sebagai update
             item.isUpdate = true;
             item.namaLama = namaLama;
           } else {
-            // NOP sama, nama sama → skip (uncheck otomatis)
             item.dipilih = false;
           }
         }
-        // NOP belum ada di DB → insert baru (dipilih = true default)
       }
 
       setState(() {
@@ -117,108 +111,118 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
 
   // ─── Parser hasil OCR ─────────────────────────────────────────────────────
   //
-  // Masalah OCR tabel:
-  // 1. Nama kadang ada di baris yang sama dengan NOP (setelah tahun)
-  // 2. Nama kadang terpotong ke baris berikutnya (OCR line-break di tengah nama)
-  // 3. Satu orang bisa punya banyak NOP → duplikat by NOP, BUKAN by nama
+  // Pola tabel SPPT:
+  //   [No] | [NOP 34.01.060.002.013.XXXX.X] | [Tahun] | [Nama Pemilik] | [Alamat]
   //
-  // Strategi:
-  // - Scan semua baris, cari NOP dengan regex
-  // - Untuk setiap NOP, gabungkan teks dari baris yang sama + baris berikutnya
-  //   selama baris berikutnya bukan NOP baru dan bukan header tabel
-  // - Duplikat: cek by NOP saja
+  // Masalah umum OCR:
+  //   1. Nama pendek (JUNI, KINAH) dianggap kosong oleh threshold lama
+  //   2. Nama bergelar (DRS. H. GONDO SUHADYO, M.SI) tersebar di 2 baris
+  //   3. Kolom alamat (DK KARA...) ikut terbaca sebagai bagian nama
+  //   4. Titik/koma di nama gelar ikut dihapus
+  //
+  // Strategi baru:
+  //   - Setelah NOP + tahun, ambil token hingga terdeteksi pola alamat (DK, KP, JL, dll)
+  //   - Jika nama di baris sama kosong, lihat baris berikutnya (max 2 baris)
+  //   - Gabung baris lanjutan selama bukan NOP baru / bukan pola alamat
+  //   - Threshold nama diturunkan: minimal 2 karakter huruf
+
+  // Pola awalan alamat yang umum di data SPPT Jawa
+  static final RegExp _alamatPrefixRegex = RegExp(
+    r'\b(DK|RT|RW|KP|KM|JL|JLN|DESA|DUSUN|KEL|KELURAHAN|GG|GANG|BLOK|PERUM|PERENG|GAMPINGAN|SUMUR|TEBING|SECANG|KRADENON|KARANG)\b',
+    caseSensitive: false,
+  );
+
+  // NOP regex — toleran terhadap spasi di antara segmen
+  static final RegExp _nopRegex = RegExp(
+    r'(\d{2}[.\s]\d{2}[.\s]\d{3}[.\s]\d{3}[.\s]\d{3}[.\s]\d{4}[.\s]\d)',
+  );
+
+  // Pola header/footer tabel
+  static final RegExp _headerRegex = RegExp(
+    r'^\s*(No\.?|NOP|Nama\s+Pemilik|Tahun|Blok|Total|Ketetapan|PBB)\s*$',
+    caseSensitive: false,
+  );
+
+  // Pola baris yang hanya angka (nomor urut)
+  static final RegExp _nomorUrut = RegExp(r'^\d{1,4}$');
+
   List<_ScanItem> _parseOcrResult(String rawText) {
     final List<_ScanItem> result = [];
-
-    final RegExp nopRegex = RegExp(
-      r'(\d{2}[.\s]\d{2}[.\s]\d{3}[.\s]\d{3}[.\s]\d{3}[.\s]\d{4}[.\s]\d)',
-    );
-
-    // Regex header/footer tabel yang harus diabaikan
-    final RegExp headerRegex = RegExp(
-      r'^(No|NOP|Nama|Tahun|No\.|Blok|\d+\s*$)',
-      caseSensitive: false,
-    );
-
-    final lines = rawText.split('\n');
+    final lines = rawText.split('\n').map((l) => l.trim()).toList();
 
     for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      final match = nopRegex.firstMatch(line);
+      final line = lines[i];
+      final match = _nopRegex.firstMatch(line);
       if (match == null) continue;
 
-      // Normalisasi NOP: hapus spasi di antara digit-titik
-      final String nopRaw = match.group(1)!;
-      final String nop = nopRaw.replaceAll(RegExp(r'\s+'), '');
+      // Normalisasi NOP
+      final String nop =
+          match.group(1)!.replaceAll(RegExp(r'\s+'), '');
       final String nomorPetak = _parseNomorPetak(nop);
 
-      // Hindari duplikat NOP dalam hasil scan ini
+      // Skip duplikat NOP dalam hasil scan
       if (result.any((e) => e.nop == nop)) continue;
 
-      // ── Ekstrak nama ──────────────────────────────────────────────────────
-      // Langkah 1: ambil sisa teks di baris yang sama setelah NOP
+      // ── Step 1: Ambil sisa baris setelah NOP ───────────────────────────
       String sisaBaris = line.substring(match.end).trim();
-      // Hapus tahun (4 digit, misal 2026) di awal sisa
-      sisaBaris = sisaBaris.replaceAll(RegExp(r'^\s*20\d{2}\s*'), '').trim();
-      // Hapus karakter non-huruf di awal (misal nomor urut, pipe, bracket)
-      sisaBaris = sisaBaris.replaceAll(RegExp(r'^[\d|\[\]{}\s]+'), '').trim();
 
-      String nama = sisaBaris;
+      // Hapus tahun 4 digit di awal (misal "2026")
+      sisaBaris =
+          sisaBaris.replaceFirst(RegExp(r'^\s*20\d{2}\s*'), '').trim();
 
-      // Langkah 2: jika nama di baris ini kosong atau sangat pendek,
-      // lihat ke baris-baris berikutnya (selama bukan NOP baru / header)
-      if (_isNamaTerlalupendek(nama)) {
-        final StringBuffer buf = StringBuffer(nama);
-        for (int j = i + 1; j <= i + 3 && j < lines.length; j++) {
-          final nextLine = lines[j].trim();
-          // Hentikan jika baris berikutnya adalah NOP baru
-          if (nopRegex.hasMatch(nextLine)) break;
-          // Hentikan jika baris berikutnya adalah header tabel
-          if (headerRegex.hasMatch(nextLine)) break;
-          // Hentikan jika baris berikutnya hanya angka (nomor urut)
-          if (RegExp(r'^\d+$').hasMatch(nextLine)) break;
+      // Hapus nomor urut / pipe / bracket di awal
+      sisaBaris =
+          sisaBaris.replaceFirst(RegExp(r'^[\d\s|.\[\]{}]+'), '').trim();
 
-          final String kandidat = _bersihkanBaris(nextLine);
-          if (kandidat.isNotEmpty) {
-            buf.write(buf.isEmpty ? '' : ' ');
-            buf.write(kandidat);
-            // Jika sudah cukup panjang, berhenti
-            if (buf.length >= 4) break;
+      // Potong di kolom alamat (ambil hanya sebelum pola alamat)
+      sisaBaris = _potongSebelumAlamat(sisaBaris);
+
+      String nama = sisaBaris.trim();
+
+      // ── Step 2: Jika nama di baris ini kosong/tidak ada huruf,
+      //           lihat baris berikutnya ───────────────────────────────────
+      if (!_mengandungHurufCukup(nama)) {
+        for (int j = i + 1; j <= i + 2 && j < lines.length; j++) {
+          final next = lines[j];
+          if (_nopRegex.hasMatch(next)) break;
+          if (_headerRegex.hasMatch(next)) break;
+          if (_nomorUrut.hasMatch(next)) break;
+
+          final kandidat = _potongSebelumAlamat(next).trim();
+          if (_mengandungHurufCukup(kandidat)) {
+            nama = kandidat;
+            break;
           }
         }
-        nama = buf.toString().trim();
       }
 
-      // Langkah 3: jika nama masih terpotong (OCR pisah nama di 2 baris
-      // tapi baris berikutnya ada lanjutan teks tanpa NOP baru)
-      // → coba gabung sampai ketemu NOP berikutnya
-      if (!_isNamaTerlalupendek(nama)) {
-        // Nama sudah OK, tapi cek apakah baris berikutnya adalah
-        // lanjutan nama (tidak ada angka, tidak ada NOP)
-        if (i + 1 < lines.length) {
-          final nextLine = lines[i + 1].trim();
-          if (!nopRegex.hasMatch(nextLine) &&
-              !headerRegex.hasMatch(nextLine) &&
-              !RegExp(r'^\d+$').hasMatch(nextLine)) {
-            final String lanjutan = _bersihkanBaris(nextLine);
-            // Gabung hanya jika lanjutan adalah huruf saja (bukan angka)
-            if (lanjutan.isNotEmpty &&
-                lanjutan.contains(RegExp(r'[A-Za-z]')) &&
-                !lanjutan.contains(RegExp(r'\d'))) {
-              // Cek: apakah seperti sambungan nama (tidak ada titik / kata kunci)
-              final bool bukan_header = !RegExp(
-                r'(nop|nama|tahun|blok|no\.)',
-                caseSensitive: false,
-              ).hasMatch(lanjutan);
-              if (bukan_header) {
-                nama = '$nama $lanjutan'.trim();
-              }
+      // ── Step 3: Cek apakah baris berikutnya adalah lanjutan nama
+      //           (kasus nama 2 baris: DRS. H. GONDO SUHADYO / M.SI) ──────
+      if (_mengandungHurufCukup(nama)) {
+        for (int j = i + 1; j <= i + 2 && j < lines.length; j++) {
+          final next = lines[j];
+          if (_nopRegex.hasMatch(next)) break;
+          if (_headerRegex.hasMatch(next)) break;
+          if (_nomorUrut.hasMatch(next)) break;
+
+          final lanjutan = _potongSebelumAlamat(next).trim();
+
+          // Lanjutan valid: mengandung huruf, tidak ada angka banyak,
+          // dan tidak terlihat seperti baris NOP / header baru
+          if (_mengandungHurufCukup(lanjutan) &&
+              !lanjutan.contains(RegExp(r'\d{4}')) &&
+              !_alamatPrefixRegex.hasMatch(lanjutan)) {
+            // Hanya gabung jika lanjutan ini pendek (kemungkinan gelar/suffix)
+            // atau nama saat ini masih pendek
+            if (lanjutan.split(' ').length <= 4 || nama.split(' ').length <= 2) {
+              nama = '$nama $lanjutan'.trim();
+              break;
             }
           }
         }
       }
 
-      // Bersihkan nama akhir
+      // ── Step 4: Normalisasi nama akhir ────────────────────────────────
       nama = _normalizeNama(nama);
       if (nama.isEmpty) continue;
 
@@ -229,7 +233,6 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
       ));
     }
 
-    // Urutkan berdasarkan nomor petak
     result.sort((a, b) =>
         (int.tryParse(a.nomorPetak) ?? 0)
             .compareTo(int.tryParse(b.nomorPetak) ?? 0));
@@ -237,31 +240,41 @@ class _ScanSpptPageState extends State<ScanSpptPage> {
     return result;
   }
 
-  bool _isNamaTerlalupendek(String s) => s.trim().length < 3;
+  /// Potong string di titik kemunculan pola alamat pertama.
+  /// Contoh: "GIMAN DK GUNUNGSARI" → "GIMAN"
+  String _potongSebelumAlamat(String s) {
+    final m = _alamatPrefixRegex.firstMatch(s);
+    if (m == null) return s;
+    // Hanya potong jika pola alamat bukan di awal baris
+    // (supaya baris yang MEMANG isinya alamat tidak jadi nama kosong)
+    if (m.start == 0) return '';
+    return s.substring(0, m.start).trim();
+  }
 
-  /// Bersihkan baris dari karakter aneh, sisakan huruf dan spasi
-  String _bersihkanBaris(String line) {
-    return line
-        .replaceAll(RegExp(r'[|\[\]{}\\]'), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+  /// Cek apakah string mengandung minimal 2 huruf berurutan
+  bool _mengandungHurufCukup(String s) {
+    return RegExp(r'[A-Za-z]{2,}').hasMatch(s.trim());
   }
 
   /// Normalisasi nama akhir:
+  /// - Pertahankan titik dan koma (untuk gelar: DRS., H., M.SI)
   /// - Hapus angka di awal/akhir
-  /// - Hapus karakter selain huruf, spasi, titik, tanda hubung
   /// - Uppercase
   String _normalizeNama(String nama) {
-    String result = nama
-        .replaceAll(RegExp(r'^[\d\s|.,-]+'), '') // hapus angka di awal
-        .replaceAll(RegExp(r'[\d|]+$'), '')      // hapus angka di akhir
-        .replaceAll(RegExp(r'[^A-Za-z\s.\-]'), '') // hanya huruf
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim()
-        .toUpperCase();
-    // Abaikan jika hasil adalah header tabel
-    if (RegExp(r'^(NOP|NAMA|TAHUN|BLOK|NO)\.?$').hasMatch(result)) return '';
-    return result;
+    // Hapus angka di awal (nomor urut yang nyempil)
+    String r = nama.replaceFirst(RegExp(r'^[\d\s|]+'), '');
+    // Hapus karakter aneh selain huruf, spasi, titik, koma, tanda hubung, apostrof
+    r = r.replaceAll(RegExp(r"[^\w\s.,\-']"), '');
+    // Hapus angka di akhir
+    r = r.replaceAll(RegExp(r'[\d]+$'), '');
+    // Normalisasi spasi
+    r = r.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
+    // Buang jika hasil adalah kata header tabel saja
+    if (RegExp(r'^(NOP|NAMA|TAHUN|BLOK|NO|TOTAL|KETETAPAN|PBB)\.?$')
+        .hasMatch(r)) return '';
+    // Minimal 2 huruf
+    if (!RegExp(r'[A-Z]{2}').hasMatch(r)) return '';
+    return r;
   }
 
   // ─── Import ke DB ─────────────────────────────────────────────────────────
