@@ -9,9 +9,8 @@ import '../../models/sppt_model.dart';
 import '../../utils/masking_helper.dart';
 import '../../services/peta_service.dart';
 import '../../services/auth_service.dart';
+import 'add_sppt_page.dart';
 import 'form_sppt_page.dart';
-import 'scan_sppt_page.dart';
-import 'import_sppt_page.dart';
 
 class SpptPage extends StatefulWidget {
   final String blokId;
@@ -119,7 +118,6 @@ class _SpptPageState extends State<SpptPage> {
     final String? error = await _auth.verifyForUnhide();
     if (!mounted) return;
     setState(() => _isVerifying = false);
-
     if (error == null) {
       setState(() => _isUnhidden = true);
     } else {
@@ -203,59 +201,6 @@ class _SpptPageState extends State<SpptPage> {
     }
   }
 
-  /// Bottom sheet pilih metode import
-  void _showImportOptions() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (_) => SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text('Pilih Metode Import',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary)),
-        ),
-        ListTile(
-          leading: const Icon(Icons.table_chart_rounded,
-              color: AppColors.primary),
-          title: const Text('Import dari Spreadsheet'),
-          subtitle: const Text('.xlsx / .csv — lebih akurat',
-              style: TextStyle(fontSize: 12, color: Colors.green)),
-          onTap: () async {
-            Navigator.pop(context);
-            final result = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                    builder: (_) =>
-                        ImportSpptPage(blokId: widget.blokId)));
-            if (result == true) _loadData();
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.document_scanner_rounded,
-              color: AppColors.primary),
-          title: const Text('Scan Import (OCR)'),
-          subtitle: const Text('Dari foto dokumen fisik',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          onTap: () async {
-            Navigator.pop(context);
-            final result = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                    builder: (_) =>
-                        ScanSpptPage(blokId: widget.blokId)));
-            if (result == true) _loadData();
-          },
-        ),
-        const SizedBox(height: 8),
-      ])),
-    );
-  }
-
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -271,12 +216,6 @@ class _SpptPageState extends State<SpptPage> {
       appBar: AppBar(
         title: Text('SPPT ${widget.blokLabel}'),
         actions: [
-          // Tombol import — buka bottom sheet pilih metode
-          IconButton(
-            icon: const Icon(Icons.upload_rounded, color: Colors.white),
-            tooltip: 'Import Data',
-            onPressed: _showImportOptions,
-          ),
           if (adaNOP)
             if (_isVerifying)
               const Padding(
@@ -306,16 +245,22 @@ class _SpptPageState extends State<SpptPage> {
               ),
         ],
       ),
+      // FAB + → buka AddSpptPage dengan 3 pilihan
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        tooltip: 'Tambah Data SPPT',
         onPressed: () async {
-          await Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      FormSpptPage(blokId: widget.blokId)));
-          _loadData();
+          final result = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddSpptPage(
+                blokId: widget.blokId,
+                blokLabel: widget.blokLabel,
+              ),
+            ),
+          );
+          if (result == true) _loadData();
         },
         child: const Icon(Icons.add_rounded),
       ),
@@ -415,7 +360,8 @@ class _SpptPageState extends State<SpptPage> {
                                         const Text('Belum ada gambar peta',
                                             style: TextStyle(
                                                 fontSize: 13,
-                                                color: AppColors.textSecondary)),
+                                                color:
+                                                    AppColors.textSecondary)),
                                         const SizedBox(height: 10),
                                         OutlinedButton.icon(
                                           onPressed: _showPetaOptions,
@@ -450,7 +396,8 @@ class _SpptPageState extends State<SpptPage> {
                       ],
                       _SectionHeader(
                           title: 'Data SPPT',
-                          subtitle: '${_allData.length} bidang tanah terdata'),
+                          subtitle:
+                              '${_allData.length} bidang tanah terdata'),
                       const SizedBox(height: 10),
                       TextField(
                         controller: _searchCtrl,
@@ -481,21 +428,6 @@ class _SpptPageState extends State<SpptPage> {
                                     const Text('Belum ada data SPPT',
                                         style: TextStyle(
                                             color: AppColors.textSecondary)),
-                                    const SizedBox(height: 12),
-                                    OutlinedButton.icon(
-                                      onPressed: _showImportOptions,
-                                      style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(
-                                              color: AppColors.primary)),
-                                      icon: const Icon(
-                                          Icons.upload_rounded,
-                                          color: AppColors.primary,
-                                          size: 18),
-                                      label: const Text('Import Data',
-                                          style: TextStyle(
-                                              color: AppColors.primary,
-                                              fontSize: 13)),
-                                    ),
                                   ])))
                           : _buildTabel(),
                       const SizedBox(height: 80),
