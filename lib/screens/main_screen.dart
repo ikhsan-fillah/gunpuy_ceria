@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gunpuy_ceria/constants/app_colors.dart';
 import 'package:gunpuy_ceria/screens/home/home_page.dart';
 import 'package:gunpuy_ceria/screens/warga/warga_page.dart';
-import 'package:gunpuy_ceria/screens/sppt/sppt_page.dart';
+import 'package:gunpuy_ceria/screens/sppt/sppt_blok_picker_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -17,7 +17,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _pages = const [
     HomePage(),
     WargaPage(),
-    SpptPage(),
+    SpptBlokPickerPage(),
   ];
 
   @override
