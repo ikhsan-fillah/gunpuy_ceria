@@ -97,12 +97,8 @@ class DatabaseHelper {
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
     if (oldVersion < 4) {
-      // 1. Tambah kolom blok_id, data lama otomatis dapat '013'
       await db.execute(
           "ALTER TABLE sppt ADD COLUMN blok_id TEXT NOT NULL DEFAULT '013'");
-
-      // 2. Hapus UNIQUE lama pada nomor_petak (SQLite tidak support DROP CONSTRAINT)
-      //    → Recreate tabel sppt dengan constraint baru
       await db.execute('''
         CREATE TABLE sppt_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +140,21 @@ class DatabaseHelper {
   Future<int> deleteWarga(int id) async {
     final db = await database;
     return await db.delete('warga', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Update RT/RW untuk semua anggota dalam satu KK sekaligus
+  Future<int> updateRTRWByNoKK(String noKK, String rt, String rw) async {
+    final db = await database;
+    return await db.update(
+      'warga',
+      {
+        'rt': rt,
+        'rw': rw,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'no_kk = ?',
+      whereArgs: [noKK],
+    );
   }
 
   Future<List<Map<String, dynamic>>> getListKK() async {
@@ -238,7 +249,6 @@ class DatabaseHelper {
     return await db.delete('sppt', where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Semua SPPT dalam satu blok
   Future<List<Map<String, dynamic>>> getAllSPPT({
     required String blokId,
     String orderBy = 'nomor_petak ASC',
@@ -260,19 +270,17 @@ class DatabaseHelper {
       String keyword, String blokId) async {
     final db = await database;
     return await db.query('sppt',
-        where:
-            'blok_id = ? AND (nama_pemilik LIKE ? OR nop LIKE ?)',
+        where: 'blok_id = ? AND (nama_pemilik LIKE ? OR nop LIKE ?)',
         whereArgs: [blokId, '%$keyword%', '%$keyword%']);
   }
 
   Future<Map<String, dynamic>?> getSPPTByNop(String nop) async {
     final db = await database;
-    final result =
-        await db.query('sppt', where: 'nop = ?', whereArgs: [nop], limit: 1);
+    final result = await db
+        .query('sppt', where: 'nop = ?', whereArgs: [nop], limit: 1);
     return result.isNotEmpty ? result.first : null;
   }
 
-  /// Cari berdasarkan blokId + nomor_petak
   Future<Map<String, dynamic>?> getSPPTByBlokDanPetak(
       String blokId, String nomorPetak) async {
     final db = await database;
@@ -283,8 +291,6 @@ class DatabaseHelper {
     return result.isNotEmpty ? result.first : null;
   }
 
-  /// Import batch dari hasil scan OCR.
-  /// Memerlukan blokId agar UNIQUE constraint (blok_id, nomor_petak) terpenuhi.
   Future<Map<String, int>> importScanSPPT(
       List<Map<String, String>> items, String blokId) async {
     final db = await database;
