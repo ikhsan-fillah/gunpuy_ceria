@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import '../../constants/app_colors.dart';
 import '../../database/database_helper.dart';
 import '../../models/warga_model.dart';
@@ -16,8 +16,8 @@ class _WargaImportItem {
   String rw;
   String? pendidikan;
   String? pekerjaan;
-  bool dipilih;
-  bool isUpdate;
+  bool dipilih = true;
+  bool isUpdate = false;
   int? existingId;
   String? errorMsg;
 
@@ -32,8 +32,6 @@ class _WargaImportItem {
     this.pendidikan,
     this.pekerjaan,
     this.dipilih = true,
-    this.isUpdate = false,
-    this.existingId,
     this.errorMsg,
   });
 }
@@ -135,7 +133,7 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
         if (item.nik != null && item.nik!.isNotEmpty) {
           try {
             match = allWarga.firstWhere(
-              (w) => w.nik != null && w.nik!.trim() == item.nik!.trim());
+                (w) => w.nik != null && w.nik!.trim() == item.nik!.trim());
           } catch (_) {}
         }
         match ??= () {
@@ -172,11 +170,17 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
     final Map<String, int> idx = {};
     for (int i = 0; i < headers.length; i++) {
       final h = headers[i].toUpperCase().replaceAll(' ', '_');
-      if (h.contains('NO_KK') || h == 'KK' || h.contains('NO.KK')) idx['no_kk'] = i;
+      if (h.contains('NO_KK') || h == 'KK' || h.contains('NO.KK'))
+        idx['no_kk'] = i;
       if (h == 'NAMA' || h.contains('NAMA_LENGKAP')) idx['nama'] = i;
       if (h.contains('NIK')) idx['nik'] = i;
-      if (h.contains('TANGGAL') || h.contains('TGL') || h.contains('LAHIR')) idx['tanggal_lahir'] = i;
-      if (h.contains('JENIS') || h.contains('KELAMIN') || h == 'JK' || h == 'L/P' || h == 'L_P') idx['jenis_kelamin'] = i;
+      if (h.contains('TANGGAL') || h.contains('TGL') || h.contains('LAHIR'))
+        idx['tanggal_lahir'] = i;
+      if (h.contains('JENIS') ||
+          h.contains('KELAMIN') ||
+          h == 'JK' ||
+          h == 'L/P' ||
+          h == 'L_P') idx['jenis_kelamin'] = i;
       if (h == 'RT') idx['rt'] = i;
       if (h == 'RW') idx['rw'] = i;
       if (h.contains('PENDIDIKAN')) idx['pendidikan'] = i;
@@ -185,7 +189,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
     return idx;
   }
 
-  _WargaImportItem _buildItem(List<String> cols, Map<String, int> idx, {dynamic rawTgl}) {
+  _WargaImportItem _buildItem(List<String> cols, Map<String, int> idx,
+      {dynamic rawTgl}) {
     String get(String key) {
       final i = idx[key];
       if (i == null || i >= cols.length) return '';
@@ -202,31 +207,70 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
     final pendidikan = get('pendidikan');
     final pekerjaan = get('pekerjaan');
 
-    if (noKK.isEmpty) return _WargaImportItem(
-        noKK: noKK, nama: nama, tanggalLahir: '', jenisKelamin: '', rt: rt, rw: rw,
-        errorMsg: 'No. KK kosong', dipilih: false);
-    if (nama.isEmpty) return _WargaImportItem(
-        noKK: noKK, nama: '', tanggalLahir: '', jenisKelamin: '', rt: rt, rw: rw,
-        errorMsg: 'Nama kosong', dipilih: false);
+    if (noKK.isEmpty)
+      return _WargaImportItem(
+          noKK: noKK,
+          nama: nama,
+          tanggalLahir: '',
+          jenisKelamin: '',
+          rt: rt,
+          rw: rw,
+          errorMsg: 'No. KK kosong',
+          dipilih: false);
+    if (nama.isEmpty)
+      return _WargaImportItem(
+          noKK: noKK,
+          nama: '',
+          tanggalLahir: '',
+          jenisKelamin: '',
+          rt: rt,
+          rw: rw,
+          errorMsg: 'Nama kosong',
+          dipilih: false);
 
     final tgl = _parseDate(tglRaw);
-    if (tgl == null) return _WargaImportItem(
-        noKK: noKK, nama: nama, tanggalLahir: '', jenisKelamin: '', rt: rt, rw: rw,
-        errorMsg: 'Format tanggal tidak dikenali: "${get('tanggal_lahir')}"', dipilih: false);
+    if (tgl == null)
+      return _WargaImportItem(
+          noKK: noKK,
+          nama: nama,
+          tanggalLahir: '',
+          jenisKelamin: '',
+          rt: rt,
+          rw: rw,
+          errorMsg: 'Format tanggal tidak dikenali: "${get('tanggal_lahir')}"',
+          dipilih: false);
 
     final jk = _parseJK(jkRaw);
-    if (jk == null) return _WargaImportItem(
-        noKK: noKK, nama: nama, tanggalLahir: tgl, jenisKelamin: '', rt: rt, rw: rw,
-        errorMsg: 'Jenis kelamin tidak dikenali: "$jkRaw" (gunakan L atau P)', dipilih: false);
+    if (jk == null)
+      return _WargaImportItem(
+          noKK: noKK,
+          nama: nama,
+          tanggalLahir: tgl,
+          jenisKelamin: '',
+          rt: rt,
+          rw: rw,
+          errorMsg: 'Jenis kelamin tidak dikenali: "$jkRaw" (gunakan L atau P)',
+          dipilih: false);
 
-    if (rt.replaceAll('0', '').isEmpty || rw.replaceAll('0', '').isEmpty) return _WargaImportItem(
-        noKK: noKK, nama: nama, tanggalLahir: tgl, jenisKelamin: jk, rt: rt, rw: rw,
-        errorMsg: 'RT/RW kosong', dipilih: false);
+    if (rt.replaceAll('0', '').isEmpty || rw.replaceAll('0', '').isEmpty)
+      return _WargaImportItem(
+          noKK: noKK,
+          nama: nama,
+          tanggalLahir: tgl,
+          jenisKelamin: jk,
+          rt: rt,
+          rw: rw,
+          errorMsg: 'RT/RW kosong',
+          dipilih: false);
 
     return _WargaImportItem(
-      noKK: noKK, nama: nama,
+      noKK: noKK,
+      nama: nama,
       nik: nik.isEmpty ? null : nik,
-      tanggalLahir: tgl, jenisKelamin: jk, rt: rt, rw: rw,
+      tanggalLahir: tgl,
+      jenisKelamin: jk,
+      rt: rt,
+      rw: rw,
       pendidikan: pendidikan.isEmpty ? null : pendidikan,
       pekerjaan: pekerjaan.isEmpty ? null : pekerjaan,
     );
@@ -247,21 +291,32 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
       final row = rows[r];
       final cols = row.map((c) => _cellStr(c?.value)).toList();
       if (cols.every((c) => c.isEmpty)) continue;
-      final rawTgl = (tglIdx != null && tglIdx < row.length) ? row[tglIdx]?.value : null;
+      final rawTgl =
+          (tglIdx != null && tglIdx < row.length) ? row[tglIdx]?.value : null;
       result.add(_buildItem(cols, idx, rawTgl: rawTgl));
     }
     return result;
   }
 
   List<_WargaImportItem> _parseCsv(String raw) {
-    final lines = raw.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    final lines = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
     if (lines.isEmpty) return [];
     final delimiter = lines[0].contains(';') ? ';' : ',';
-    final headers = lines[0].split(delimiter).map((h) => h.replaceAll('"', '').trim()).toList();
+    final headers = lines[0]
+        .split(delimiter)
+        .map((h) => h.replaceAll('"', '').trim())
+        .toList();
     final idx = _detectColumns(headers);
     final result = <_WargaImportItem>[];
     for (int r = 1; r < lines.length; r++) {
-      final cols = lines[r].split(delimiter).map((c) => c.replaceAll('"', '').trim()).toList();
+      final cols = lines[r]
+          .split(delimiter)
+          .map((c) => c.replaceAll('"', '').trim())
+          .toList();
       if (cols.every((c) => c.isEmpty)) continue;
       result.add(_buildItem(cols, idx));
     }
@@ -269,7 +324,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
   }
 
   Future<void> _importData() async {
-    final selected = _items.where((e) => e.dipilih && e.errorMsg == null).toList();
+    final selected =
+        _items.where((e) => e.dipilih && e.errorMsg == null).toList();
     if (selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Pilih minimal 1 data yang valid untuk diimport'),
@@ -277,15 +333,23 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
       ));
       return;
     }
-    setState(() { _isProcessing = true; _statusText = 'Menyimpan data...'; });
+    setState(() {
+      _isProcessing = true;
+      _statusText = 'Menyimpan data...';
+    });
     int inserted = 0, updated = 0;
     for (final item in selected) {
       final map = WargaModel(
         id: item.existingId,
-        noKK: item.noKK, nama: item.nama, nik: item.nik,
-        tanggalLahir: item.tanggalLahir, jenisKelamin: item.jenisKelamin,
-        rt: item.rt, rw: item.rw,
-        statusPendidikan: item.pendidikan, pekerjaan: item.pekerjaan,
+        noKK: item.noKK,
+        nama: item.nama,
+        nik: item.nik,
+        tanggalLahir: item.tanggalLahir,
+        jenisKelamin: item.jenisKelamin,
+        rt: item.rt,
+        rw: item.rw,
+        statusPendidikan: item.pendidikan,
+        pekerjaan: item.pekerjaan,
       ).toMap();
       if (item.isUpdate && item.existingId != null) {
         await _db.updateWarga(item.existingId!, map);
@@ -304,7 +368,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
 
   @override
   Widget build(BuildContext context) {
-    final validDipilih = _items.where((e) => e.dipilih && e.errorMsg == null).length;
+    final validDipilih =
+        _items.where((e) => e.dipilih && e.errorMsg == null).length;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Import Spreadsheet Warga'),
@@ -313,23 +378,29 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
             TextButton(
               onPressed: _isProcessing ? null : _importData,
               child: Text('Import ($validDipilih)',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
-      body: _isProcessing ? _buildLoading()
-          : _isDone ? _buildHasilImport()
-          : _items.isEmpty ? _buildPilihFile()
-          : _buildPreview(),
+      body: _isProcessing
+          ? _buildLoading()
+          : _isDone
+              ? _buildHasilImport()
+              : _items.isEmpty
+                  ? _buildPilihFile()
+                  : _buildPreview(),
     );
   }
 
   Widget _buildLoading() => Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(_statusText, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-        ]));
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text(_statusText,
+            style:
+                const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+      ]));
 
   Widget _buildPilihFile() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -339,12 +410,17 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-                color: AppColors.primarySurface, borderRadius: BorderRadius.circular(16)),
+                color: AppColors.primarySurface,
+                borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
-              const Icon(Icons.people_rounded, size: 64, color: AppColors.primary),
+              const Icon(Icons.people_rounded,
+                  size: 64, color: AppColors.primary),
               const SizedBox(height: 16),
               const Text('Import Data Warga',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 8),
               const Text(
                 'Upload file Excel (.xlsx) atau CSV\nsesuai template yang sudah disediakan.',
@@ -358,24 +434,47 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppColors.primaryLight)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Row(children: [
-                    Icon(Icons.table_rows_rounded, size: 15, color: AppColors.primary),
-                    SizedBox(width: 6),
-                    Text('Kolom yang dibutuhkan:',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                  ]),
-                  const SizedBox(height: 8),
-                  _ColInfo(label: 'no_kk', desc: 'Nomor KK (16 digit)', wajib: true),
-                  _ColInfo(label: 'nama', desc: 'Nama lengkap', wajib: true),
-                  _ColInfo(label: 'tanggal_lahir', desc: 'Format DD/MM/YYYY', wajib: true),
-                  _ColInfo(label: 'jenis_kelamin', desc: 'L atau P', wajib: true),
-                  _ColInfo(label: 'rt', desc: 'Nomor RT', wajib: true),
-                  _ColInfo(label: 'rw', desc: 'Nomor RW', wajib: true),
-                  _ColInfo(label: 'nik', desc: 'NIK 16 digit', wajib: false),
-                  _ColInfo(label: 'pendidikan', desc: 'Contoh: SMA, SD', wajib: false),
-                  _ColInfo(label: 'pekerjaan', desc: 'Contoh: Petani', wajib: false),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(children: [
+                        Icon(Icons.table_rows_rounded,
+                            size: 15, color: AppColors.primary),
+                        SizedBox(width: 6),
+                        Text('Kolom yang dibutuhkan:',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary)),
+                      ]),
+                      const SizedBox(height: 8),
+                      _ColInfo(
+                          label: 'no_kk',
+                          desc: 'Nomor KK (16 digit)',
+                          wajib: true),
+                      _ColInfo(
+                          label: 'nama', desc: 'Nama lengkap', wajib: true),
+                      _ColInfo(
+                          label: 'tanggal_lahir',
+                          desc: 'Format DD/MM/YYYY',
+                          wajib: true),
+                      _ColInfo(
+                          label: 'jenis_kelamin',
+                          desc: 'L atau P',
+                          wajib: true),
+                      _ColInfo(label: 'rt', desc: 'Nomor RT', wajib: true),
+                      _ColInfo(label: 'rw', desc: 'Nomor RW', wajib: true),
+                      _ColInfo(
+                          label: 'nik', desc: 'NIK 16 digit', wajib: false),
+                      _ColInfo(
+                          label: 'pendidikan',
+                          desc: 'Contoh: SMA, SD',
+                          wajib: false),
+                      _ColInfo(
+                          label: 'pekerjaan',
+                          desc: 'Contoh: Petani',
+                          wajib: false),
+                    ]),
               ),
             ]),
           ),
@@ -393,22 +492,31 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
               icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
               label: const Text('Pilih File (.xlsx / .csv)',
-                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold)),
             ),
           ),
         ]),
       );
 
   Widget _buildPreview() {
-    final dipilihCount = _items.where((e) => e.dipilih && e.errorMsg == null).length;
+    final dipilihCount =
+        _items.where((e) => e.dipilih && e.errorMsg == null).length;
     final errorCount = _items.where((e) => e.errorMsg != null).length;
-    final updateCount = _items.where((e) => e.dipilih && e.isUpdate && e.errorMsg == null).length;
+    final updateCount = _items
+        .where((e) => e.dipilih && e.isUpdate && e.errorMsg == null)
+        .length;
     final Map<String, List<_WargaImportItem>> byKK = {};
     for (final item in _items) {
-      byKK.putIfAbsent(item.noKK.isEmpty ? '(KK kosong)' : item.noKK, () => []).add(item);
+      byKK
+          .putIfAbsent(item.noKK.isEmpty ? '(KK kosong)' : item.noKK, () => [])
+          .add(item);
     }
     return Column(children: [
       Container(
@@ -417,14 +525,21 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
         color: AppColors.primarySurface,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('📄 $_namaFile',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 2),
           Text('${_items.length} baris  •  ${byKK.length} KK',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Row(children: [
             Text('Dipilih: $dipilihCount',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
             if (updateCount > 0) ...[
               const Text('  •  '),
               Text('Update: $updateCount',
@@ -440,7 +555,9 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
           GestureDetector(
             onTap: _pickFile,
             child: const Text('📂 Ganti file',
-                style: TextStyle(fontSize: 12, color: AppColors.primary,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
                     decoration: TextDecoration.underline)),
           ),
         ]),
@@ -459,25 +576,35 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
               decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(
-                      color: AppColors.cardShadow, blurRadius: 4,
-                      offset: const Offset(0, 2))]),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.cardShadow,
+                        blurRadius: 4,
+                        offset: const Offset(0, 2))
+                  ]),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
                     child: Row(children: [
-                      const Icon(Icons.home_rounded, size: 16, color: AppColors.primary),
+                      const Icon(Icons.home_rounded,
+                          size: 16, color: AppColors.primary),
                       const SizedBox(width: 6),
-                      Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                             Text('KK: $kkNo',
-                                style: const TextStyle(fontSize: 12,
-                                    fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                            Text('RT $kkRT / RW $kkRW  •  ${anggota.length} anggota',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary)),
+                            Text(
+                                'RT $kkRT / RW $kkRW  •  ${anggota.length} anggota',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary)),
                           ])),
                     ]),
                   ),
@@ -493,9 +620,12 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8, offset: const Offset(0, -2))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, -2))
+          ],
         ),
         child: SizedBox(
           width: double.infinity,
@@ -505,11 +635,14 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                 backgroundColor: AppColors.primary,
                 disabledBackgroundColor: AppColors.primaryLight,
                 minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
             icon: const Icon(Icons.cloud_upload_rounded, color: Colors.white),
             label: Text('Simpan $dipilihCount Data Terpilih',
                 style: const TextStyle(
-                    color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold)),
           ),
         ),
       ),
@@ -520,14 +653,17 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
     final bool hasError = item.errorMsg != null;
     return CheckboxListTile(
       value: hasError ? false : item.dipilih,
-      onChanged: hasError ? null : (v) => setState(() => item.dipilih = v ?? false),
+      onChanged:
+          hasError ? null : (v) => setState(() => item.dipilih = v ?? false),
       controlAffinity: ListTileControlAffinity.leading,
       activeColor: AppColors.primary,
       title: Row(children: [
         Expanded(
           child: Text(
             item.nama.isEmpty ? '(Nama kosong)' : item.nama,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
                 color: hasError ? Colors.red : AppColors.textPrimary),
           ),
         ),
@@ -535,9 +671,13 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-                color: Colors.orange.shade100, borderRadius: BorderRadius.circular(5)),
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(5)),
             child: const Text('UPDATE',
-                style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    color: Colors.orange,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold)),
           ),
         if (hasError)
           const Icon(Icons.error_rounded, color: Colors.red, size: 18),
@@ -548,7 +688,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
             : '${item.tanggalLahir}  •  ${item.jenisKelamin}'
                 '${item.nik != null ? '  •  NIK: ${item.nik}' : ''}',
         style: TextStyle(
-            fontSize: 11, color: hasError ? Colors.red : AppColors.textSecondary),
+            fontSize: 11,
+            color: hasError ? Colors.red : AppColors.textSecondary),
       ),
     );
   }
@@ -561,7 +702,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
-            width: 80, height: 80,
+            width: 80,
+            height: 80,
             decoration: const BoxDecoration(
                 color: Color(0xFFE8F5E9), shape: BoxShape.circle),
             child: const Icon(Icons.check_circle_rounded,
@@ -569,13 +711,21 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
           ),
           const SizedBox(height: 20),
           const Text('Import Selesai!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary)),
           const SizedBox(height: 16),
-          _ResultRow(icon: Icons.person_add_rounded, color: Colors.green,
-              label: 'Data baru', value: ins),
-          _ResultRow(icon: Icons.update_rounded, color: Colors.orange,
-              label: 'Data diperbarui', value: upd),
+          _ResultRow(
+              icon: Icons.person_add_rounded,
+              color: Colors.green,
+              label: 'Data baru',
+              value: ins),
+          _ResultRow(
+              icon: Icons.update_rounded,
+              color: Colors.orange,
+              label: 'Data diperbarui',
+              value: upd),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -584,15 +734,22 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
               child: const Text('Kembali ke Data Warga',
-                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: () => setState(() {
-              _isDone = false; _items = []; _namaFile = null; _statusText = '';
+              _isDone = false;
+              _items = [];
+              _namaFile = null;
+              _statusText = '';
             }),
             child: const Text('Import File Lain',
                 style: TextStyle(color: AppColors.primary, fontSize: 14)),
@@ -607,24 +764,30 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
 class _ColInfo extends StatelessWidget {
   final String label, desc;
   final bool wajib;
-  const _ColInfo({required this.label, required this.desc, required this.wajib});
+  const _ColInfo(
+      {required this.label, required this.desc, required this.wajib});
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(children: [
           Container(
-            width: 6, height: 6,
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(
                 color: wajib ? AppColors.primary : AppColors.primaryLight,
                 shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
-                  color: wajib ? AppColors.textPrimary : AppColors.textSecondary)),
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color:
+                      wajib ? AppColors.textPrimary : AppColors.textSecondary)),
           const SizedBox(width: 6),
           Text('— $desc',
-              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary)),
           if (!wajib)
             const Text(' (opsional)',
                 style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
@@ -637,17 +800,24 @@ class _ResultRow extends StatelessWidget {
   final Color color;
   final String label;
   final int value;
-  const _ResultRow({required this.icon, required this.color, required this.label, required this.value});
+  const _ResultRow(
+      {required this.icon,
+      required this.color,
+      required this.label,
+      required this.value});
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(width: 12),
-          Expanded(child: Text(label,
-              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary))),
+          Expanded(
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 14, color: AppColors.textSecondary))),
           Text('$value data',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.bold, color: color)),
         ]),
       );
 }

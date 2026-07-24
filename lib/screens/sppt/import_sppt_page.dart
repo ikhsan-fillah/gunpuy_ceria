@@ -1,7 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import '../../constants/app_colors.dart';
 import '../../database/database_helper.dart';
 
@@ -10,17 +9,14 @@ class _ImportItem {
   final String nop;
   final String nomorPetak; // diparsing dari NOP
   final String namaPemilik;
-  bool dipilih;
-  bool isUpdate;
-  String namaLama;
+  bool dipilih = true;
+  bool isUpdate = false;
+  String namaLama = '';
 
   _ImportItem({
     required this.nop,
     required this.nomorPetak,
     required this.namaPemilik,
-    this.dipilih = true,
-    this.isUpdate = false,
-    this.namaLama = '',
   });
 }
 
@@ -170,9 +166,8 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
       ));
     }
 
-    result.sort((a, b) =>
-        (int.tryParse(a.nomorPetak) ?? 0)
-            .compareTo(int.tryParse(b.nomorPetak) ?? 0));
+    result.sort((a, b) => (int.tryParse(a.nomorPetak) ?? 0)
+        .compareTo(int.tryParse(b.nomorPetak) ?? 0));
     return result;
   }
 
@@ -223,9 +218,8 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
       ));
     }
 
-    result.sort((a, b) =>
-        (int.tryParse(a.nomorPetak) ?? 0)
-            .compareTo(int.tryParse(b.nomorPetak) ?? 0));
+    result.sort((a, b) => (int.tryParse(a.nomorPetak) ?? 0)
+        .compareTo(int.tryParse(b.nomorPetak) ?? 0));
     return result;
   }
 
@@ -326,8 +320,7 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
               const Text(
                 'Upload file Excel (.xlsx) atau CSV (.csv) dari pak dukuh.\nSistem otomatis baca kolom NOP dan Nama.',
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 20),
               // Format info
@@ -336,8 +329,8 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
                 decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: AppColors.primaryLight, width: 1)),
+                    border:
+                        Border.all(color: AppColors.primaryLight, width: 1)),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -397,8 +390,7 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
 
   Widget _buildPreview() {
     final int dipilihCount = _items.where((e) => e.dipilih).length;
-    final int updateCount =
-        _items.where((e) => e.dipilih && e.isUpdate).length;
+    final int updateCount = _items.where((e) => e.dipilih && e.isUpdate).length;
     final int newCount = dipilihCount - updateCount;
 
     return Column(children: [
@@ -443,8 +435,8 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 4),
             elevation: 1,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             child: CheckboxListTile(
               value: item.dipilih,
               onChanged: (v) => setState(() => item.dipilih = v ?? false),
@@ -495,8 +487,7 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
                               fontSize: 11, color: Colors.orange)),
                     Text(item.nop,
                         style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary)),
+                            fontSize: 11, color: AppColors.textSecondary)),
                   ]),
             ),
           );
@@ -545,71 +536,68 @@ class _ImportSpptPageState extends State<ImportSpptPage> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                    color: Color(0xFFE8F5E9), shape: BoxShape.circle),
-                child: const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF43A047), size: 48),
-              ),
-              const SizedBox(height: 20),
-              const Text('Import Selesai!',
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: const BoxDecoration(
+                color: Color(0xFFE8F5E9), shape: BoxShape.circle),
+            child: const Icon(Icons.check_circle_rounded,
+                color: Color(0xFF43A047), size: 48),
+          ),
+          const SizedBox(height: 20),
+          const Text('Import Selesai!',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 16),
+          _ResultRow(
+              icon: Icons.add_circle_rounded,
+              color: Colors.green,
+              label: 'Data baru',
+              value: ins),
+          _ResultRow(
+              icon: Icons.update_rounded,
+              color: Colors.orange,
+              label: 'Data diperbarui',
+              value: upd),
+          _ResultRow(
+              icon: Icons.skip_next_rounded,
+              color: Colors.grey,
+              label: 'Dilewati (sama)',
+              value: skip),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('Kembali ke Data SPPT',
                   style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 16),
-              _ResultRow(
-                  icon: Icons.add_circle_rounded,
-                  color: Colors.green,
-                  label: 'Data baru',
-                  value: ins),
-              _ResultRow(
-                  icon: Icons.update_rounded,
-                  color: Colors.orange,
-                  label: 'Data diperbarui',
-                  value: upd),
-              _ResultRow(
-                  icon: Icons.skip_next_rounded,
-                  color: Colors.grey,
-                  label: 'Dilewati (sama)',
-                  value: skip),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10))),
-                  child: const Text('Kembali ke Data SPPT',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _isDone = false;
-                    _items = [];
-                    _namaFile = null;
-                    _statusText = '';
-                  });
-                },
-                child: const Text('Import File Lain',
-                    style:
-                        TextStyle(color: AppColors.primary, fontSize: 14)),
-              ),
-            ]),
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _isDone = false;
+                _items = [];
+                _namaFile = null;
+                _statusText = '';
+              });
+            },
+            child: const Text('Import File Lain',
+                style: TextStyle(color: AppColors.primary, fontSize: 14)),
+          ),
+        ]),
       ),
     );
   }
@@ -656,9 +644,7 @@ class _ResultRow extends StatelessWidget {
                       fontSize: 14, color: AppColors.textSecondary))),
           Text('$value data',
               style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+                  fontSize: 14, fontWeight: FontWeight.bold, color: color)),
         ]),
       );
 }

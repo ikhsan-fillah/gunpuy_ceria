@@ -26,19 +26,6 @@ class SpptBlokPickerPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Pilih Blok',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Data SPPT dipisah per blok. Pilih blok yang ingin ditampilkan.',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 32),
             _BlokCard(
               blokId: '011',
               label: 'Blok 11',
