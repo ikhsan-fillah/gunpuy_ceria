@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import '../models/warga_model.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -147,11 +148,7 @@ class DatabaseHelper {
     final db = await database;
     return await db.update(
       'warga',
-      {
-        'rt': rt,
-        'rw': rw,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
+      {'rt': rt, 'rw': rw, 'updated_at': DateTime.now().toIso8601String()},
       where: 'no_kk = ?',
       whereArgs: [noKK],
     );
@@ -175,6 +172,13 @@ class DatabaseHelper {
     return await db.query('warga', where: 'no_kk = ?', whereArgs: [noKK]);
   }
 
+  /// Ambil semua data warga — digunakan untuk cek duplikat saat import
+  Future<List<WargaModel>> getAllWarga() async {
+    final db = await database;
+    final rows = await db.query('warga');
+    return rows.map((m) => WargaModel.fromMap(m)).toList();
+  }
+
   Future<List<Map<String, dynamic>>> searchWargaByNama(String keyword) async {
     final db = await database;
     return await db.query('warga',
@@ -183,16 +187,13 @@ class DatabaseHelper {
 
   Future<Map<String, dynamic>> getDashboardSummary() async {
     final db = await database;
-    final totalKK =
-        await db.rawQuery('SELECT COUNT(DISTINCT no_kk) as total FROM warga');
-    final totalWarga =
-        await db.rawQuery('SELECT COUNT(*) as total FROM warga');
+    final totalKK = await db.rawQuery('SELECT COUNT(DISTINCT no_kk) as total FROM warga');
+    final totalWarga = await db.rawQuery('SELECT COUNT(*) as total FROM warga');
     final lakiLaki = await db.rawQuery(
         "SELECT COUNT(*) as total FROM warga WHERE jenis_kelamin = 'Laki-laki'");
     final perempuan = await db.rawQuery(
         "SELECT COUNT(*) as total FROM warga WHERE jenis_kelamin = 'Perempuan'");
-    final totalSPPT =
-        await db.rawQuery('SELECT COUNT(*) as total FROM sppt');
+    final totalSPPT = await db.rawQuery('SELECT COUNT(*) as total FROM sppt');
     final semuaTgl = await db.query('warga', columns: ['tanggal_lahir']);
 
     int balita = 0, anakAnak = 0, remaja = 0, dewasa = 0, lansia = 0;
@@ -202,17 +203,11 @@ class DatabaseHelper {
       int umur = now.year - tgl.year;
       if (now.month < tgl.month ||
           (now.month == tgl.month && now.day < tgl.day)) umur--;
-      if (umur <= 5) {
-        balita++;
-      } else if (umur <= 11) {
-        anakAnak++;
-      } else if (umur <= 17) {
-        remaja++;
-      } else if (umur <= 59) {
-        dewasa++;
-      } else {
-        lansia++;
-      }
+      if (umur <= 5) balita++;
+      else if (umur <= 11) anakAnak++;
+      else if (umur <= 17) remaja++;
+      else if (umur <= 59) dewasa++;
+      else lansia++;
     }
 
     return {
@@ -276,8 +271,8 @@ class DatabaseHelper {
 
   Future<Map<String, dynamic>?> getSPPTByNop(String nop) async {
     final db = await database;
-    final result = await db
-        .query('sppt', where: 'nop = ?', whereArgs: [nop], limit: 1);
+    final result =
+        await db.query('sppt', where: 'nop = ?', whereArgs: [nop], limit: 1);
     return result.isNotEmpty ? result.first : null;
   }
 
@@ -295,59 +290,40 @@ class DatabaseHelper {
       List<Map<String, String>> items, String blokId) async {
     final db = await database;
     int inserted = 0, updated = 0, skipped = 0;
-
     for (final item in items) {
       final String nop = item['nop']!;
       final String nama = item['nama_pemilik']!;
       final String nomorPetak = item['nomor_petak']!;
-
       final existing = await getSPPTByNop(nop);
-
       if (existing == null) {
-        final existingByPetak =
-            await getSPPTByBlokDanPetak(blokId, nomorPetak);
+        final existingByPetak = await getSPPTByBlokDanPetak(blokId, nomorPetak);
         if (existingByPetak == null) {
           await db.insert('sppt', {
-            'blok_id': blokId,
-            'nomor_petak': nomorPetak,
-            'nop': nop,
+            'blok_id': blokId, 'nomor_petak': nomorPetak, 'nop': nop,
             'nama_pemilik': nama,
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           });
           inserted++;
         } else {
-          await db.update(
-            'sppt',
-            {
-              'nop': nop,
-              'nama_pemilik': nama,
-              'updated_at': DateTime.now().toIso8601String(),
-            },
-            where: 'id = ?',
-            whereArgs: [existingByPetak['id']],
-          );
+          await db.update('sppt',
+              {'nop': nop, 'nama_pemilik': nama,
+                'updated_at': DateTime.now().toIso8601String()},
+              where: 'id = ?', whereArgs: [existingByPetak['id']]);
           updated++;
         }
       } else {
         final String namaLama = existing['nama_pemilik'] as String;
         if (namaLama.trim().toUpperCase() != nama.trim().toUpperCase()) {
-          await db.update(
-            'sppt',
-            {
-              'nama_pemilik': nama,
-              'updated_at': DateTime.now().toIso8601String(),
-            },
-            where: 'id = ?',
-            whereArgs: [existing['id']],
-          );
+          await db.update('sppt',
+              {'nama_pemilik': nama, 'updated_at': DateTime.now().toIso8601String()},
+              where: 'id = ?', whereArgs: [existing['id']]);
           updated++;
         } else {
           skipped++;
         }
       }
     }
-
     return {'inserted': inserted, 'updated': updated, 'skipped': skipped};
   }
 
@@ -368,8 +344,7 @@ class DatabaseHelper {
         'user',
         {
           'username': username,
-          'password_hash':
-              sha256.convert(utf8.encode(password)).toString(),
+          'password_hash': sha256.convert(utf8.encode(password)).toString(),
         },
         conflictAlgorithm: ConflictAlgorithm.replace);
   }

@@ -3,9 +3,8 @@ import '../../../constants/app_colors.dart';
 import '../../../constants/app_strings.dart';
 import '../../../database/database_helper.dart';
 import '../../../utils/masking_helper.dart';
-import '../../../services/auth_service.dart';
 import 'detail_kk_page.dart';
-import 'form_warga_page.dart';
+import 'add_warga_page.dart';
 
 class WargaPage extends StatefulWidget {
   const WargaPage({super.key});
@@ -15,7 +14,6 @@ class WargaPage extends StatefulWidget {
 
 class _WargaPageState extends State<WargaPage> {
   final DatabaseHelper _db = DatabaseHelper();
-  final AuthService _auth = AuthService();
   final TextEditingController _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _listKK = [];
   List<Map<String, dynamic>> _filteredKK = [];
@@ -54,11 +52,15 @@ class _WargaPageState extends State<WargaPage> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        tooltip: 'Tambah Data Warga',
         onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const FormWargaPage()));
-          _loadData();
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddWargaPage()),
+          );
+          if (result == true) _loadData();
         },
-        child: const Icon(Icons.person_add_rounded),
+        child: const Icon(Icons.add_rounded),
       ),
       body: Column(children: [
         Padding(
@@ -69,7 +71,9 @@ class _WargaPageState extends State<WargaPage> {
               hintText: AppStrings.wargaSearchHint,
               prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
               suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? IconButton(icon: const Icon(Icons.clear, color: AppColors.textSecondary), onPressed: () => _searchCtrl.clear())
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, color: AppColors.textSecondary),
+                      onPressed: () => _searchCtrl.clear())
                   : null,
             ),
           ),
@@ -78,12 +82,18 @@ class _WargaPageState extends State<WargaPage> {
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _filteredKK.isEmpty
-                  ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.people_outline, size: 64, color: AppColors.primaryLight.withOpacity(0.5)),
-                      const SizedBox(height: 12),
-                      Text(_searchCtrl.text.isEmpty ? 'Belum ada data warga' : 'Tidak ditemukan',
-                          style: const TextStyle(color: AppColors.textSecondary)),
-                    ]))
+                  ? Center(
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(Icons.people_outline, size: 64,
+                            color: AppColors.primaryLight.withOpacity(0.5)),
+                        const SizedBox(height: 12),
+                        Text(
+                          _searchCtrl.text.isEmpty
+                              ? 'Belum ada data warga'
+                              : 'Tidak ditemukan',
+                          style: const TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ]))
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: ListView.builder(
@@ -94,8 +104,14 @@ class _WargaPageState extends State<WargaPage> {
                           return _KKCard(
                             kkData: kk,
                             onTap: () async {
-                              await Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => DetailKKPage(noKK: kk['no_kk'], namaKepala: kk['nama_kepala_keluarga'])));
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => DetailKKPage(
+                                      noKK: kk['no_kk'],
+                                      namaKepala: kk['nama_kepala_keluarga']),
+                                ),
+                              );
                               _loadData();
                             },
                           );
@@ -123,22 +139,31 @@ class _KKCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: AppColors.cardShadow, blurRadius: 6, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(color: AppColors.cardShadow, blurRadius: 6, offset: const Offset(0, 2))
+          ],
         ),
         child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${kkData['nama_kepala_keluarga']} (Kepala KK)',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary)),
-            const SizedBox(height: 4),
-            Row(children: [
-              Text('${AppStrings.labelNoKK}: ', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              Text(MaskingHelper.mask(kkData['no_kk']),
-                  style: const TextStyle(fontSize: 12, color: AppColors.masked, fontWeight: FontWeight.w500, letterSpacing: 1)),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${kkData['nama_kepala_keluarga']} (Kepala KK)',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 4),
+              Row(children: [
+                Text('${AppStrings.labelNoKK}: ',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(MaskingHelper.mask(kkData['no_kk']),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.masked,
+                        fontWeight: FontWeight.w500, letterSpacing: 1)),
+              ]),
+              const SizedBox(height: 2),
+              Text('RT ${kkData['rt']} / RW ${kkData['rw']}  •  ${kkData['jumlah_anggota']} anggota',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ]),
-            const SizedBox(height: 2),
-            Text('RT ${kkData['rt']} / RW ${kkData['rw']}  \u2022  ${kkData['jumlah_anggota']} anggota',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ])),
+          ),
           const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
         ]),
       ),
