@@ -100,50 +100,86 @@ class _DetailKKPageState extends State<DetailKKPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Edit RT / RW'),
+        // ── Tidak pakai contentPadding default bawah agar button mepet dialog
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        actionsAlignment: MainAxisAlignment.center,
         content: Form(
           key: formKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(
-              'Perubahan RT/RW akan berlaku untuk semua ${_anggota.length} anggota KK ini.',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            Row(children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _rtEditCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration:
-                      const InputDecoration(labelText: 'RT', hintText: '01'),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Wajib diisi' : null,
-                ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Perubahan akan berlaku untuk semua ${_anggota.length} anggota KK ini.',
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _rwEditCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration:
-                      const InputDecoration(labelText: 'RW', hintText: '01'),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _rtEditCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'RT', hintText: '01'),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                  ),
                 ),
-              ),
-            ]),
-          ]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _rwEditCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'RW', hintText: '01'),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                  ),
+                ),
+              ]),
+            ],
+          ),
         ),
+        // ── Actions: 2 button full-width, Simpan di atas Batal ──
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate())
-                  Navigator.pop(ctx, true);
-              },
-              child: const Text('Simpan')),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate())
+                    Navigator.pop(ctx, true);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Simpan',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 46),
+                  side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Batal',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -180,13 +216,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
       appBar: AppBar(
         title: Text(widget.namaKepala),
         actions: [
-          if (_anggota.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.location_on_outlined,
-                  color: Colors.white, size: 22),
-              tooltip: 'Edit RT/RW',
-              onPressed: _showEditRTRW,
-            ),
+          // ── Icon edit RT/RW di AppBar DIHAPUS — sudah ada tombol Edit di body ──
           if (_isVerifying)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
@@ -236,10 +266,8 @@ class _DetailKKPageState extends State<DetailKKPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          // ── Ganti SingleChildScrollView+Column ke CustomScrollView+SliverList
           : CustomScrollView(
               slivers: [
-                // ── Header KK (info No.KK, RT/RW, ringkasan) ──
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -323,16 +351,14 @@ class _DetailKKPageState extends State<DetailKKPage> {
                     ),
                   ),
                 ),
-
-                // ── List anggota KK — LAZY ──
                 if (_anggota.isEmpty)
                   const SliverToBoxAdapter(
                     child: Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 32),
                         child: Text('Belum ada anggota',
-                            style:
-                                TextStyle(color: AppColors.textSecondary)),
+                            style: TextStyle(
+                                color: AppColors.textSecondary)),
                       ),
                     ),
                   )
@@ -359,8 +385,8 @@ class _DetailKKPageState extends State<DetailKKPage> {
                               await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (_) => FormWargaPage(
-                                          warga: warga)));
+                                      builder: (_) =>
+                                          FormWargaPage(warga: warga)));
                               _loadAnggota();
                             },
                             onDelete: () async {
@@ -368,7 +394,8 @@ class _DetailKKPageState extends State<DetailKKPage> {
                                   await showDialog<bool>(
                                         context: context,
                                         builder: (_) => AlertDialog(
-                                          title: const Text('Hapus Data'),
+                                          title:
+                                              const Text('Hapus Data'),
                                           content: Text(
                                               'Hapus data ${warga.nama}?'),
                                           actions: [
@@ -376,8 +403,8 @@ class _DetailKKPageState extends State<DetailKKPage> {
                                                 onPressed: () =>
                                                     Navigator.pop(
                                                         context, false),
-                                                child:
-                                                    const Text('Batal')),
+                                                child: const Text(
+                                                    'Batal')),
                                             TextButton(
                                                 onPressed: () =>
                                                     Navigator.pop(
@@ -600,14 +627,15 @@ class _AnggotaAccordion extends StatelessWidget {
                         OutlinedButton.icon(
                           onPressed: onDelete,
                           style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.red),
+                              side:
+                                  const BorderSide(color: Colors.red),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6)),
                           icon: const Icon(Icons.delete_rounded,
                               size: 16, color: Colors.red),
                           label: const Text('Hapus',
-                              style:
-                                  TextStyle(color: Colors.red, fontSize: 12)),
+                              style: TextStyle(
+                                  color: Colors.red, fontSize: 12)),
                         ),
                       ]),
                 ]),
@@ -624,10 +652,11 @@ class _AnggotaAccordion extends StatelessWidget {
               width: 110,
               child: Text(label,
                   style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary))),
+                      fontSize: 12,
+                      color: AppColors.textSecondary))),
           const Text(': ',
-              style:
-                  TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              style: TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
           Expanded(
               child: Text(value,
                   style: const TextStyle(
