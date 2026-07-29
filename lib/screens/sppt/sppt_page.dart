@@ -37,7 +37,6 @@ class _SpptPageState extends State<SpptPage> {
   String _sortColumn = 'nomor_petak';
   bool _sortAscending = true;
   String? _petaImagePath;
-  // Cache provider gambar peta agar tidak di-decode ulang setiap rebuild
   ImageProvider? _petaImageProvider;
 
   @override
@@ -65,11 +64,11 @@ class _SpptPageState extends State<SpptPage> {
   }
 
   Future<void> _loadPeta() async {
-    final String? path = await _petaService.getSavedPetaPath();
+    // Pass blokId agar peta setiap blok tersimpan sendiri-sendiri
+    final String? path = await _petaService.getSavedPetaPath(widget.blokId);
     if (mounted)
       setState(() {
         _petaImagePath = path;
-        // Buat provider sekali, Flutter cache otomatis
         _petaImageProvider = path != null ? FileImage(File(path)) : null;
       });
   }
@@ -140,7 +139,11 @@ class _SpptPageState extends State<SpptPage> {
   }
 
   Future<void> _pickPeta(ImageSource source) async {
-    final String? path = await _petaService.pickAndSavePeta(source: source);
+    // Pass blokId agar gambar disimpan dengan key per-blok
+    final String? path = await _petaService.pickAndSavePeta(
+      blokId: widget.blokId,
+      source: source,
+    );
     if (path != null && mounted)
       setState(() {
         _petaImagePath = path;
@@ -178,7 +181,7 @@ class _SpptPageState extends State<SpptPage> {
                   style: TextStyle(color: Colors.red)),
               onTap: () async {
                 Navigator.pop(context);
-                await _petaService.deletePeta();
+                await _petaService.deletePeta(widget.blokId);
                 setState(() {
                   _petaImagePath = null;
                   _petaImageProvider = null;
@@ -238,7 +241,7 @@ class _SpptPageState extends State<SpptPage> {
           .toList();
       final path = await ExportHelper.exportSPPT(rows, widget.blokLabel);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('✅ Tersimpan di Downloads:\n${path.split('/').last}'),
+        content: Text('\u2705 Tersimpan di Downloads:\n${path.split('/').last}'),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 4),
       ));
@@ -331,8 +334,6 @@ class _SpptPageState extends State<SpptPage> {
         },
         child: const Icon(Icons.add_rounded),
       ),
-      // ── Gunakan CustomScrollView + Sliver agar header & tabel
-      //    bisa scroll bersama tapi tabel pakai SliverList (lazy) ──
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -340,7 +341,6 @@ class _SpptPageState extends State<SpptPage> {
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  // ── Bagian atas (peta, legenda, search) ──
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -399,14 +399,11 @@ class _SpptPageState extends State<SpptPage> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            // Header tabel
                             if (_allData.isNotEmpty)
                               _buildTabelHeader(adaNOP),
                           ]),
                     ),
                   ),
-
-                  // ── Baris tabel — LAZY dengan SliverList ──
                   if (_allData.isEmpty)
                     SliverToBoxAdapter(
                       child: Center(
@@ -431,14 +428,11 @@ class _SpptPageState extends State<SpptPage> {
                           final SpptModel s = _filteredData[idx];
                           final bool isLast =
                               idx == _filteredData.length - 1;
-                          return _buildTabelRow(
-                              s, idx, isLast, adaNOP);
+                          return _buildTabelRow(s, idx, isLast, adaNOP);
                         },
                         childCount: _filteredData.length,
                       ),
                     ),
-
-                  // ── Bottom padding ──
                   const SliverToBoxAdapter(child: SizedBox(height: 80)),
                 ],
               ),
@@ -446,7 +440,6 @@ class _SpptPageState extends State<SpptPage> {
     );
   }
 
-  // ── Peta widget (gunakan cached provider) ──────────────────────────────────
   Widget _buildPetaWidget() {
     return GestureDetector(
       onTap: _petaImagePath != null
@@ -455,6 +448,7 @@ class _SpptPageState extends State<SpptPage> {
               MaterialPageRoute(
                   builder: (_) => _PetaFullScreen(
                         imagePath: _petaImagePath!,
+                        blokLabel: widget.blokLabel,
                         spptList: _allData,
                         onPetakTap: (sppt) async {
                           await Navigator.push(
@@ -479,13 +473,11 @@ class _SpptPageState extends State<SpptPage> {
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: Stack(children: [
-                  // Pakai Image(...) dengan provider yang sudah di-cache
                   Image(
                     image: _petaImageProvider!,
                     fit: BoxFit.cover,
                     width: double.infinity,
                     height: double.infinity,
-                    // Tampilkan loading kecil saat decode pertama kali
                     frameBuilder: (ctx, child, frame, wasSyncLoaded) =>
                         wasSyncLoaded || frame != null
                             ? child
@@ -546,7 +538,6 @@ class _SpptPageState extends State<SpptPage> {
     );
   }
 
-  // ── Legenda — tetap Column karena biasanya kecil (< 20 item) ──────────────
   Widget _buildLegenda() {
     final int mid = (_allData.length / 2).ceil();
     return Container(
@@ -600,7 +591,6 @@ class _SpptPageState extends State<SpptPage> {
         ]),
       );
 
-  // ── Header tabel ──────────────────────────────────────────────────────────
   Widget _buildTabelHeader(bool adaNOP) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -661,9 +651,7 @@ class _SpptPageState extends State<SpptPage> {
     );
   }
 
-  // ── Satu baris tabel — dipanggil lazy oleh SliverList ─────────────────────
-  Widget _buildTabelRow(
-      SpptModel s, int idx, bool isLast, bool adaNOP) {
+  Widget _buildTabelRow(SpptModel s, int idx, bool isLast, bool adaNOP) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -840,10 +828,12 @@ class _VerifikasiSheet extends StatelessWidget {
 // ─────────── Peta Fullscreen ─────────────────────────────────────────────────
 class _PetaFullScreen extends StatelessWidget {
   final String imagePath;
+  final String blokLabel;
   final List<SpptModel> spptList;
   final Function(SpptModel) onPetakTap;
   const _PetaFullScreen(
       {required this.imagePath,
+      required this.blokLabel,
       required this.spptList,
       required this.onPetakTap});
 
@@ -854,7 +844,7 @@ class _PetaFullScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Peta Bidang Tanah'),
+        title: Text('Peta Bidang Tanah $blokLabel'),
         actions: [
           IconButton(
               icon: const Icon(Icons.close_rounded),
