@@ -98,14 +98,32 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls', 'csv'],
+    // ── FIX: Gunakan FileType.any agar Android tidak memfilter berdasarkan
+    // MIME type. CSV di Android punya MIME ganda (text/csv dan
+    // text/comma-separated-values) yang menyebabkan FileType.custom gagal
+    // menampilkan file CSV di banyak device/file manager.
+    // Validasi ekstensi dilakukan manual setelah file dipilih.
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
       withData: true,
     );
+
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     final ext = (file.extension ?? '').toLowerCase();
+
+    // Validasi ekstensi manual
+    if (!['xlsx', 'xls', 'csv'].contains(ext)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'Format ".$ext" tidak didukung. Gunakan file .xlsx, .xls, atau .csv'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+      return;
+    }
 
     setState(() {
       _isProcessing = true;
@@ -119,10 +137,9 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
       List<_WargaImportItem> parsed;
       if (ext == 'xlsx' || ext == 'xls') {
         parsed = _parseExcel(file.bytes!);
-      } else if (ext == 'csv') {
-        parsed = _parseCsv(String.fromCharCodes(file.bytes!));
       } else {
-        throw Exception('Format tidak didukung');
+        // csv
+        parsed = _parseCsv(String.fromCharCodes(file.bytes!));
       }
 
       // Cek duplikat di DB
@@ -140,7 +157,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
           try {
             return allWarga.firstWhere((w) =>
                 w.noKK == item.noKK &&
-                w.nama.trim().toUpperCase() == item.nama.trim().toUpperCase());
+                w.nama.trim().toUpperCase() ==
+                    item.nama.trim().toUpperCase());
           } catch (_) {
             return null;
           }
@@ -237,7 +255,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
           jenisKelamin: '',
           rt: rt,
           rw: rw,
-          errorMsg: 'Format tanggal tidak dikenali: "${get('tanggal_lahir')}"',
+          errorMsg:
+              'Format tanggal tidak dikenali: "${get('tanggal_lahir')}"',
           dipilih: false);
 
     final jk = _parseJK(jkRaw);
@@ -249,7 +268,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
           jenisKelamin: '',
           rt: rt,
           rw: rw,
-          errorMsg: 'Jenis kelamin tidak dikenali: "$jkRaw" (gunakan L atau P)',
+          errorMsg:
+              'Jenis kelamin tidak dikenali: "$jkRaw" (gunakan L atau P)',
           dipilih: false);
 
     if (rt.replaceAll('0', '').isEmpty || rw.replaceAll('0', '').isEmpty)
@@ -299,9 +319,11 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
   }
 
   List<_WargaImportItem> _parseCsv(String raw) {
-    final lines = raw
+    // Hapus BOM UTF-8 jika ada (file CSV dari Excel kadang ada BOM di awal)
+    final cleaned = raw.startsWith('\uFEFF') ? raw.substring(1) : raw;
+    final lines = cleaned
         .split('\n')
-        .map((l) => l.trim())
+        .map((l) => l.replaceAll('\r', '').trim())
         .where((l) => l.isNotEmpty)
         .toList();
     if (lines.isEmpty) return [];
@@ -394,12 +416,13 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
   }
 
   Widget _buildLoading() => Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          child:
+              Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const CircularProgressIndicator(),
         const SizedBox(height: 16),
         Text(_statusText,
-            style:
-                const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+            style: const TextStyle(
+                fontSize: 14, color: AppColors.textSecondary)),
       ]));
 
   Widget _buildPilihFile() => SingleChildScrollView(
@@ -425,7 +448,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
               const Text(
                 'Upload file Excel (.xlsx) atau CSV\nsesuai template yang sudah disediakan.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                style:
+                    TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 20),
               Container(
@@ -453,7 +477,9 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                           desc: 'Nomor KK (16 digit)',
                           wajib: true),
                       _ColInfo(
-                          label: 'nama', desc: 'Nama lengkap', wajib: true),
+                          label: 'nama',
+                          desc: 'Nama lengkap',
+                          wajib: true),
                       _ColInfo(
                           label: 'tanggal_lahir',
                           desc: 'Format DD/MM/YYYY',
@@ -462,10 +488,14 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                           label: 'jenis_kelamin',
                           desc: 'L atau P',
                           wajib: true),
-                      _ColInfo(label: 'rt', desc: 'Nomor RT', wajib: true),
-                      _ColInfo(label: 'rw', desc: 'Nomor RW', wajib: true),
                       _ColInfo(
-                          label: 'nik', desc: 'NIK 16 digit', wajib: false),
+                          label: 'rt', desc: 'Nomor RT', wajib: true),
+                      _ColInfo(
+                          label: 'rw', desc: 'Nomor RW', wajib: true),
+                      _ColInfo(
+                          label: 'nik',
+                          desc: 'NIK 16 digit',
+                          wajib: false),
                       _ColInfo(
                           label: 'pendidikan',
                           desc: 'Contoh: SMA, SD',
@@ -494,7 +524,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10))),
-              icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
+              icon:
+                  const Icon(Icons.upload_file_rounded, color: Colors.white),
               label: const Text('Pilih File (.xlsx / .csv)',
                   style: TextStyle(
                       color: Colors.white,
@@ -515,7 +546,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
     final Map<String, List<_WargaImportItem>> byKK = {};
     for (final item in _items) {
       byKK
-          .putIfAbsent(item.noKK.isEmpty ? '(KK kosong)' : item.noKK, () => [])
+          .putIfAbsent(
+              item.noKK.isEmpty ? '(KK kosong)' : item.noKK, () => [])
           .add(item);
     }
     return Column(children: [
@@ -523,7 +555,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         color: AppColors.primarySurface,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('📄 $_namaFile',
               style: const TextStyle(
                   fontSize: 12,
@@ -543,12 +576,14 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
             if (updateCount > 0) ...[
               const Text('  •  '),
               Text('Update: $updateCount',
-                  style: const TextStyle(fontSize: 12, color: Colors.orange)),
+                  style: const TextStyle(
+                      fontSize: 12, color: Colors.orange)),
             ],
             if (errorCount > 0) ...[
               const Text('  •  '),
               Text('Error: $errorCount',
-                  style: const TextStyle(fontSize: 12, color: Colors.red)),
+                  style:
+                      const TextStyle(fontSize: 12, color: Colors.red)),
             ],
           ]),
           const SizedBox(height: 8),
@@ -593,7 +628,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                       const SizedBox(width: 6),
                       Expanded(
                           child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
                             Text('KK: $kkNo',
                                 style: const TextStyle(
@@ -608,7 +644,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                           ])),
                     ]),
                   ),
-                  const Divider(height: 1, color: AppColors.primarySurface),
+                  const Divider(
+                      height: 1, color: AppColors.primarySurface),
                   ...anggota.map((item) => _buildAnggotaTile(item)),
                 ],
               ),
@@ -637,7 +674,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10))),
-            icon: const Icon(Icons.cloud_upload_rounded, color: Colors.white),
+            icon: const Icon(Icons.cloud_upload_rounded,
+                color: Colors.white),
             label: Text('Simpan $dipilihCount Data Terpilih',
                 style: const TextStyle(
                     color: Colors.white,
@@ -669,7 +707,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
         ),
         if (item.isUpdate && !hasError)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
                 color: Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(5)),
@@ -700,7 +739,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        child:
+            Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
             width: 80,
             height: 80,
@@ -752,7 +792,8 @@ class _ImportWargaPageState extends State<ImportWargaPage> {
               _statusText = '';
             }),
             child: const Text('Import File Lain',
-                style: TextStyle(color: AppColors.primary, fontSize: 14)),
+                style:
+                    TextStyle(color: AppColors.primary, fontSize: 14)),
           ),
         ]),
       ),
@@ -782,15 +823,17 @@ class _ColInfo extends StatelessWidget {
               style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color:
-                      wajib ? AppColors.textPrimary : AppColors.textSecondary)),
+                  color: wajib
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary)),
           const SizedBox(width: 6),
           Text('— $desc',
               style: const TextStyle(
                   fontSize: 11, color: AppColors.textSecondary)),
           if (!wajib)
             const Text(' (opsional)',
-                style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                style: TextStyle(
+                    fontSize: 10, color: AppColors.textSecondary)),
         ]),
       );
 }
@@ -817,7 +860,9 @@ class _ResultRow extends StatelessWidget {
                       fontSize: 14, color: AppColors.textSecondary))),
           Text('$value data',
               style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
         ]),
       );
 }
