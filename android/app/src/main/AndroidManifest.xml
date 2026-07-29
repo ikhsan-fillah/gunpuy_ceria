@@ -6,16 +6,26 @@
 
     <!-- Kamera & galeri untuk upload peta SPPT -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Storage Android <= 12 (API 32) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
+    <!-- Storage Android 13+ (API 33+): gambar -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- Storage Android 13+ (API 33+): dokumen & file lain (CSV, XLSX, dll)
+         Dibutuhkan oleh file_picker untuk akses file non-media -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+
+    <!-- Provider untuk file_picker agar bisa akses file via SAF (Storage Access Framework) -->
     <application
         android:label="Gunpuy Ceria"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
