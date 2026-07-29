@@ -1,26 +1,23 @@
 import 'dart:io';
 import 'package:excel/excel.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 class ExportHelper {
   // ─── Warga ──────────────────────────────────────────────────────────────────
-  /// Kolom: no_kk, nama, nik, tanggal_lahir (DD/MM/YYYY), jenis_kelamin (L/P),
-  ///        rt, rw, pendidikan, pekerjaan
-  static Future<void> exportWarga(List<Map<String, dynamic>> rows) async {
+  /// Simpan ke Downloads, return path file.
+  /// Kolom: no_kk, nama, nik, tanggal_lahir, jenis_kelamin, rt, rw, pendidikan, pekerjaan
+  static Future<String> exportWarga(List<Map<String, dynamic>> rows) async {
     final excel = Excel.createExcel();
     final sheet = excel['Data Warga'];
     excel.delete('Sheet1');
 
-    final headers = [
+    _writeHeader(sheet, [
       'no_kk', 'nama', 'nik', 'tanggal_lahir',
       'jenis_kelamin', 'rt', 'rw', 'pendidikan', 'pekerjaan',
-    ];
-    _writeHeader(sheet, headers);
+    ]);
 
     for (int r = 0; r < rows.length; r++) {
       final row = rows[r];
-      final values = [
+      _writeRow(sheet, r + 1, [
         row['no_kk']?.toString() ?? '',
         row['nama']?.toString() ?? '',
         row['nik']?.toString() ?? '',
@@ -30,8 +27,7 @@ class ExportHelper {
         row['rw']?.toString() ?? '',
         row['status_pendidikan']?.toString() ?? '',
         row['pekerjaan']?.toString() ?? '',
-      ];
-      _writeRow(sheet, r + 1, values);
+      ]);
     }
 
     sheet.setColumnWidth(0, 20);
@@ -41,22 +37,21 @@ class ExportHelper {
     sheet.setColumnWidth(4, 14);
 
     final now = DateTime.now();
-    await _saveAndShare(
+    return _saveToDownloads(
         excel,
         'data_warga_${now.year}${_pad(now.month)}${_pad(now.day)}.xlsx');
   }
 
   // ─── SPPT ───────────────────────────────────────────────────────────────────
+  /// Simpan ke Downloads, return path file.
   /// Kolom: nomor_petak, nop, nama_pemilik
-  static Future<void> exportSPPT(
+  static Future<String> exportSPPT(
       List<Map<String, dynamic>> rows, String blokLabel) async {
     final excel = Excel.createExcel();
-    final sheetName = 'SPPT $blokLabel';
-    final sheet = excel[sheetName];
+    final sheet = excel['SPPT $blokLabel'];
     excel.delete('Sheet1');
 
-    final headers = ['nomor_petak', 'nop', 'nama_pemilik'];
-    _writeHeader(sheet, headers);
+    _writeHeader(sheet, ['nomor_petak', 'nop', 'nama_pemilik']);
 
     for (int r = 0; r < rows.length; r++) {
       final row = rows[r];
@@ -73,12 +68,31 @@ class ExportHelper {
 
     final now = DateTime.now();
     final safeName = blokLabel.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    await _saveAndShare(
+    return _saveToDownloads(
         excel,
         'sppt_${safeName}_${now.year}${_pad(now.month)}${_pad(now.day)}.xlsx');
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Simpan ke /storage/emulated/0/Download/ (folder Downloads bawaan Android).
+  /// Tidak butuh permission WRITE_EXTERNAL_STORAGE di Android 10+ (scoped storage).
+  static Future<String> _saveToDownloads(Excel excel, String fileName) async {
+    final bytes = excel.encode();
+    if (bytes == null) throw Exception('Gagal encode Excel');
+
+    // Folder Downloads publik Android
+    const downloadsPath = '/storage/emulated/0/Download';
+    final dir = Directory(downloadsPath);
+    if (!dir.existsSync()) {
+      // Fallback ke external storage root jika path berbeda
+      throw Exception('Folder Downloads tidak ditemukan di perangkat ini');
+    }
+
+    final file = File('$downloadsPath/$fileName');
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
+  }
 
   static void _writeHeader(Sheet sheet, List<String> headers) {
     for (int i = 0; i < headers.length; i++) {
@@ -99,20 +113,6 @@ class ExportHelper {
           .cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: rowIndex))
           .value = TextCellValue(values[c]);
     }
-  }
-
-  static Future<void> _saveAndShare(Excel excel, String fileName) async {
-    final bytes = excel.encode();
-    if (bytes == null) throw Exception('Gagal encode Excel');
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles(
-      [XFile(file.path,
-          mimeType:
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
-      subject: fileName,
-    );
   }
 
   /// YYYY-MM-DD → DD/MM/YYYY

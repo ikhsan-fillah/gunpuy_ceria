@@ -64,7 +64,14 @@ class _WargaPageState extends State<WargaPage> {
         }
         return;
       }
-      await ExportHelper.exportWarga(rows);
+      final path = await ExportHelper.exportWarga(rows);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✅ Tersimpan di Downloads:\n${path.split('/').last}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

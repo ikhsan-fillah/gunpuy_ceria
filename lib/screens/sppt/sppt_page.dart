@@ -215,7 +215,6 @@ class _SpptPageState extends State<SpptPage> {
         ));
         return;
       }
-      // Konversi SpptModel ke Map untuk ExportHelper
       final rows = _allData
           .map((s) => {
                 'nomor_petak': s.nomorPetak,
@@ -223,7 +222,12 @@ class _SpptPageState extends State<SpptPage> {
                 'nama_pemilik': s.namaPemilik,
               })
           .toList();
-      await ExportHelper.exportSPPT(rows, widget.blokLabel);
+      final path = await ExportHelper.exportSPPT(rows, widget.blokLabel);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('✅ Tersimpan di Downloads:\n${path.split('/').last}'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 4),
+      ));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Gagal export: $e'),
@@ -249,7 +253,6 @@ class _SpptPageState extends State<SpptPage> {
       appBar: AppBar(
         title: Text('SPPT ${widget.blokLabel}'),
         actions: [
-          // Tombol Export Excel
           _isExporting
               ? const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
@@ -267,7 +270,6 @@ class _SpptPageState extends State<SpptPage> {
                   tooltip: 'Export Excel',
                   onPressed: _allData.isEmpty ? null : _exportExcel,
                 ),
-          // Tombol Unhide NOP
           if (adaNOP)
             if (_isVerifying)
               const Padding(
