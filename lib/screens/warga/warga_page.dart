@@ -3,6 +3,7 @@ import '../../../constants/app_colors.dart';
 import '../../../constants/app_strings.dart';
 import '../../../database/database_helper.dart';
 import '../../../utils/masking_helper.dart';
+import '../../../utils/export_helper.dart';
 import 'detail_kk_page.dart';
 import 'add_warga_page.dart';
 
@@ -18,6 +19,7 @@ class _WargaPageState extends State<WargaPage> {
   List<Map<String, dynamic>> _listKK = [];
   List<Map<String, dynamic>> _filteredKK = [];
   bool _isLoading = true;
+  bool _isExporting = false;
 
   @override
   void initState() {
@@ -29,25 +31,82 @@ class _WargaPageState extends State<WargaPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final data = await _db.getListKK();
-    if (mounted) setState(() { _listKK = data; _filteredKK = data; _isLoading = false; });
+    if (mounted)
+      setState(() {
+        _listKK = data;
+        _filteredKK = data;
+        _isLoading = false;
+      });
   }
 
   void _onSearch() {
     final String q = _searchCtrl.text.toLowerCase();
     setState(() {
-      _filteredKK = _listKK.where((kk) =>
-          (kk['nama_kepala_keluarga'] as String).toLowerCase().contains(q)).toList();
+      _filteredKK = _listKK
+          .where((kk) =>
+              (kk['nama_kepala_keluarga'] as String).toLowerCase().contains(q))
+          .toList();
     });
   }
 
+  Future<void> _exportExcel() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+    try {
+      final db = await _db.database;
+      final rows = await db.query('warga', orderBy: 'no_kk ASC, nama ASC');
+      if (rows.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Belum ada data warga untuk diekspor'),
+            backgroundColor: Colors.orange,
+          ));
+        }
+        return;
+      }
+      await ExportHelper.exportWarga(rows);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal export: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   @override
-  void dispose() { _searchCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Data Warga (${_listKK.length} KK)'),
+        actions: [
+          _isExporting
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.download_rounded),
+                  tooltip: 'Export Excel',
+                  onPressed: _listKK.isEmpty ? null : _exportExcel,
+                ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
@@ -69,10 +128,12 @@ class _WargaPageState extends State<WargaPage> {
             controller: _searchCtrl,
             decoration: InputDecoration(
               hintText: AppStrings.wargaSearchHint,
-              prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+              prefixIcon:
+                  const Icon(Icons.search, color: AppColors.textSecondary),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, color: AppColors.textSecondary),
+                      icon: const Icon(Icons.clear,
+                          color: AppColors.textSecondary),
                       onPressed: () => _searchCtrl.clear())
                   : null,
             ),
@@ -83,21 +144,27 @@ class _WargaPageState extends State<WargaPage> {
               ? const Center(child: CircularProgressIndicator())
               : _filteredKK.isEmpty
                   ? Center(
-                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(Icons.people_outline, size: 64,
-                            color: AppColors.primaryLight.withOpacity(0.5)),
-                        const SizedBox(height: 12),
-                        Text(
-                          _searchCtrl.text.isEmpty
-                              ? 'Belum ada data warga'
-                              : 'Tidak ditemukan',
-                          style: const TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ]))
+                      child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.people_outline,
+                                size: 64,
+                                color:
+                                    AppColors.primaryLight.withOpacity(0.5)),
+                            const SizedBox(height: 12),
+                            Text(
+                              _searchCtrl.text.isEmpty
+                                  ? 'Belum ada data warga'
+                                  : 'Tidak ditemukan',
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary),
+                            ),
+                          ]))
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 0, 16, 80),
                         itemCount: _filteredKK.length,
                         itemBuilder: (context, index) {
                           final kk = _filteredKK[index];
@@ -109,7 +176,8 @@ class _WargaPageState extends State<WargaPage> {
                                 MaterialPageRoute(
                                   builder: (_) => DetailKKPage(
                                       noKK: kk['no_kk'],
-                                      namaKepala: kk['nama_kepala_keluarga']),
+                                      namaKepala:
+                                          kk['nama_kepala_keluarga']),
                                 ),
                               );
                               _loadData();
@@ -140,31 +208,43 @@ class _KKCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            BoxShadow(color: AppColors.cardShadow, blurRadius: 6, offset: const Offset(0, 2))
+            BoxShadow(
+                color: AppColors.cardShadow,
+                blurRadius: 6,
+                offset: const Offset(0, 2))
           ],
         ),
         child: Row(children: [
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${kkData['nama_kepala_keluarga']} (Kepala KK)',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              Row(children: [
-                Text('${AppStrings.labelNoKK}: ',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                Text(MaskingHelper.mask(kkData['no_kk']),
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.masked,
-                        fontWeight: FontWeight.w500, letterSpacing: 1)),
-              ]),
-              const SizedBox(height: 2),
-              Text('RT ${kkData['rt']} / RW ${kkData['rw']}  •  ${kkData['jumlah_anggota']} anggota',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            ]),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${kkData['nama_kepala_keluarga']} (Kepala KK)',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    Text('${AppStrings.labelNoKK}: ',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
+                    Text(MaskingHelper.mask(kkData['no_kk']),
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.masked,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1)),
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(
+                      'RT ${kkData['rt']} / RW ${kkData['rw']}  •  ${kkData['jumlah_anggota']} anggota',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ]),
           ),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+          const Icon(Icons.chevron_right_rounded,
+              color: AppColors.textSecondary),
         ]),
       ),
     );

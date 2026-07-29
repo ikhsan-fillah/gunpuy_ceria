@@ -1,3 +1,4 @@
+// ignore_for_file: use_build_context_synchronously
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,7 @@ import '../../constants/app_strings.dart';
 import '../../database/database_helper.dart';
 import '../../models/sppt_model.dart';
 import '../../utils/masking_helper.dart';
+import '../../utils/export_helper.dart';
 import '../../services/peta_service.dart';
 import '../../services/auth_service.dart';
 import 'add_sppt_page.dart';
@@ -31,6 +33,7 @@ class _SpptPageState extends State<SpptPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   List<SpptModel> _allData = [], _filteredData = [];
   bool _isLoading = true, _isUnhidden = false, _isVerifying = false;
+  bool _isExporting = false;
   String _sortColumn = 'nomor_petak';
   bool _sortAscending = true;
   String? _petaImagePath;
@@ -201,6 +204,36 @@ class _SpptPageState extends State<SpptPage> {
     }
   }
 
+  Future<void> _exportExcel() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+    try {
+      if (_allData.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Belum ada data SPPT untuk diekspor'),
+          backgroundColor: Colors.orange,
+        ));
+        return;
+      }
+      // Konversi SpptModel ke Map untuk ExportHelper
+      final rows = _allData
+          .map((s) => {
+                'nomor_petak': s.nomorPetak,
+                'nop': s.nop ?? '',
+                'nama_pemilik': s.namaPemilik,
+              })
+          .toList();
+      await ExportHelper.exportSPPT(rows, widget.blokLabel);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Gagal export: $e'),
+        backgroundColor: Colors.red,
+      ));
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -216,6 +249,25 @@ class _SpptPageState extends State<SpptPage> {
       appBar: AppBar(
         title: Text('SPPT ${widget.blokLabel}'),
         actions: [
+          // Tombol Export Excel
+          _isExporting
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.download_rounded),
+                  tooltip: 'Export Excel',
+                  onPressed: _allData.isEmpty ? null : _exportExcel,
+                ),
+          // Tombol Unhide NOP
           if (adaNOP)
             if (_isVerifying)
               const Padding(
@@ -245,7 +297,6 @@ class _SpptPageState extends State<SpptPage> {
               ),
         ],
       ),
-      // FAB + → buka AddSpptPage dengan 3 pilihan
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -654,7 +705,7 @@ class _SpptPageState extends State<SpptPage> {
   }
 }
 
-// ─────────── Bottom Sheet Verifikasi ───────────────────────────────────────────
+// ─────────── Bottom Sheet Verifikasi ────────────────────────────────────────
 class _VerifikasiSheet extends StatelessWidget {
   final String labelData;
   final VoidCallback onVerify;
@@ -734,7 +785,7 @@ class _VerifikasiSheet extends StatelessWidget {
   }
 }
 
-// ─────────── Peta Fullscreen ───────────────────────────────────────────────────
+// ─────────── Peta Fullscreen ─────────────────────────────────────────────────
 class _PetaFullScreen extends StatelessWidget {
   final String imagePath;
   final List<SpptModel> spptList;
@@ -768,7 +819,7 @@ class _PetaFullScreen extends StatelessWidget {
   }
 }
 
-// ─────────── Section Header ────────────────────────────────────────────────────
+// ─────────── Section Header ──────────────────────────────────────────────────
 class _SectionHeader extends StatelessWidget {
   final String title, subtitle;
   const _SectionHeader({required this.title, required this.subtitle});

@@ -3,7 +3,7 @@ description: Aplikasi Pendataan Warga Dusun Gunung Puyuh - KKN UPN Veteran Yogya
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -21,6 +21,7 @@ dependencies:
   google_mlkit_text_recognition: ^0.13.1
   excel: ^4.0.6
   file_picker: ^8.1.2
+  share_plus: ^10.0.2
   cupertino_icons: ^1.0.6
 
 dev_dependencies:
@@ -31,8 +32,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/icon/icon.png
 
 flutter_launcher_icons:
   android: true
