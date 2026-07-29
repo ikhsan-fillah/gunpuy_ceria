@@ -28,11 +28,9 @@ android {
     }
 
     buildTypes {
+        // ── Release: minify + shrink + proguard ──
         release {
-            // Signing dengan debug key (ganti dengan release keystore jika perlu)
             signingConfig = signingConfigs.getByName("debug")
-
-            // Aktifkan minify + resource shrinking untuk APK yang lebih kecil
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -40,12 +38,14 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // ── Debug: tidak diminify agar flutter build apk (debug) tetap cepat ──
         debug {
             isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
 
 flutter {
-    source = "../.." 
+    source = "../.."
 }
