@@ -107,13 +107,11 @@ class ExportHelper {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$fileName');
     await file.writeAsBytes(bytes, flush: true);
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path,
-            mimeType:
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
-        subject: fileName,
-      ),
+    await Share.shareXFiles(
+      [XFile(file.path,
+          mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+      subject: fileName,
     );
   }
 
