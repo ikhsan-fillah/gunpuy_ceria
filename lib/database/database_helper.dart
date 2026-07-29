@@ -143,6 +143,12 @@ class DatabaseHelper {
     return await db.delete('warga', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Hapus seluruh anggota KK berdasarkan no_kk sekaligus
+  Future<int> deleteKKByNoKK(String noKK) async {
+    final db = await database;
+    return await db.delete('warga', where: 'no_kk = ?', whereArgs: [noKK]);
+  }
+
   /// Update RT/RW untuk semua anggota dalam satu KK sekaligus
   Future<int> updateRTRWByNoKK(String noKK, String rt, String rw) async {
     final db = await database;

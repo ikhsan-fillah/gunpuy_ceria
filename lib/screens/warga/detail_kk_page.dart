@@ -100,7 +100,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Edit RT / RW'),
-        // ── Tidak pakai contentPadding default bawah agar button mepet dialog
         contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
         actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         actionsAlignment: MainAxisAlignment.center,
@@ -141,7 +140,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
             ],
           ),
         ),
-        // ── Actions: 2 button full-width, Simpan di atas Batal ──
         actions: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -199,6 +197,117 @@ class _DetailKKPageState extends State<DetailKKPage> {
     }
   }
 
+  /// Konfirmasi lalu hapus seluruh KK beserta semua anggotanya
+  Future<void> _hapusSeluruhKK() async {
+    final int jumlah = _anggota.length;
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.warning_rounded, color: Colors.red, size: 22),
+          SizedBox(width: 8),
+          Text('Hapus Seluruh KK',
+              style: TextStyle(color: Colors.red, fontSize: 16)),
+        ]),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textPrimary, height: 1.5),
+                children: [
+                  const TextSpan(text: 'Tindakan ini akan menghapus '),
+                  TextSpan(
+                    text: '$jumlah anggota',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.red),
+                  ),
+                  const TextSpan(
+                      text:
+                          ' dalam KK ini secara permanen dan tidak dapat dikembalikan.'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 14, color: Colors.red.shade400),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    'No. KK, NIK, dan seluruh data anggota akan dihapus.',
+                    style: TextStyle(fontSize: 11, color: Colors.red),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.delete_forever_rounded,
+                    color: Colors.white, size: 18),
+                label: const Text('Ya, Hapus Semua',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 46),
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Batal',
+                    style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _db.deleteKKByNoKK(widget.noKK);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'KK ${widget.namaKepala} beserta $jumlah anggota berhasil dihapus'),
+          backgroundColor: Colors.red,
+        ));
+        Navigator.pop(context, true); // kembali ke list KK & trigger refresh
+      }
+    }
+  }
+
   String _maskOrShow(String? value) =>
       _isUnhidden ? (value ?? '-') : MaskingHelper.mask(value);
 
@@ -216,7 +325,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
       appBar: AppBar(
         title: Text(widget.namaKepala),
         actions: [
-          // ── Icon edit RT/RW di AppBar DIHAPUS — sudah ada tombol Edit di body ──
           if (_isVerifying)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
@@ -268,6 +376,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
+                // ── Header KK ──
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -341,16 +450,45 @@ class _DetailKKPageState extends State<DetailKKPage> {
                               ]),
                               const SizedBox(height: 4),
                               Text(
-                                '${_anggota.length} anggota  •  $ringkasan',
+                                '${_anggota.length} anggota  \u2022  $ringkasan',
                                 style: const TextStyle(
                                     fontSize: 12,
                                     color: AppColors.textSecondary),
                               ),
                             ],
+                            // ── Tombol Hapus Seluruh KK ──
+                            const SizedBox(height: 12),
+                            const Divider(height: 1, color: AppColors.primaryLight),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _hapusSeluruhKK,
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.red),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.delete_forever_rounded,
+                                    color: Colors.red, size: 17),
+                                label: const Text(
+                                  'Hapus Seluruh KK Ini',
+                                  style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
                           ]),
                     ),
                   ),
                 ),
+
+                // ── List anggota ──
                 if (_anggota.isEmpty)
                   const SliverToBoxAdapter(
                     child: Center(
@@ -395,7 +533,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
                                         context: context,
                                         builder: (_) => AlertDialog(
                                           title:
-                                              const Text('Hapus Data'),
+                                              const Text('Hapus Anggota'),
                                           content: Text(
                                               'Hapus data ${warga.nama}?'),
                                           actions: [
