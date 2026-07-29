@@ -24,7 +24,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
   bool _isVerifying = false;
   final Set<int> _expandedIds = {};
 
-  // Controller untuk Edit RT/RW
   final TextEditingController _rtEditCtrl = TextEditingController();
   final TextEditingController _rwEditCtrl = TextEditingController();
 
@@ -91,14 +90,12 @@ class _DetailKKPageState extends State<DetailKKPage> {
     }
   }
 
-  /// Dialog Edit RT/RW — update semua anggota KK sekaligus
   Future<void> _showEditRTRW() async {
     if (_anggota.isEmpty) return;
     _rtEditCtrl.text = _anggota.first.rt;
     _rwEditCtrl.text = _anggota.first.rw;
 
     final GlobalKey<FormState> formKey = GlobalKey<FormState>();
-
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -183,7 +180,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
       appBar: AppBar(
         title: Text(widget.namaKepala),
         actions: [
-          // Tombol Edit RT/RW
           if (_anggota.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.location_on_outlined,
@@ -191,7 +187,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
               tooltip: 'Edit RT/RW',
               onPressed: _showEditRTRW,
             ),
-          // Tombol Show/Hide NIK
           if (_isVerifying)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
@@ -225,7 +220,6 @@ class _DetailKKPageState extends State<DetailKKPage> {
         foregroundColor: Colors.white,
         tooltip: 'Tambah Anggota KK',
         onPressed: () async {
-          // Kirim RT/RW dari anggota pertama sebagai default
           final String rt = _anggota.isNotEmpty ? _anggota.first.rt : '';
           final String rw = _anggota.isNotEmpty ? _anggota.first.rw : '';
           await Navigator.push(
@@ -242,13 +236,14 @@ class _DetailKKPageState extends State<DetailKKPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header KK
-                    Container(
+          // ── Ganti SingleChildScrollView+Column ke CustomScrollView+SliverList
+          : CustomScrollView(
+              slivers: [
+                // ── Header KK (info No.KK, RT/RW, ringkasan) ──
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -274,51 +269,48 @@ class _DetailKKPageState extends State<DetailKKPage> {
                             ]),
                             if (_anggota.isNotEmpty) ...[
                               const SizedBox(height: 6),
-                              // RT/RW dengan tombol edit
-                              Row(
-                                children: [
-                                  const Icon(Icons.location_on_outlined,
-                                      size: 14,
-                                      color: AppColors.textSecondary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'RT ${_anggota.first.rt} / RW ${_anggota.first.rw}',
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  GestureDetector(
-                                    onTap: _showEditRTRW,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary
-                                            .withOpacity(0.1),
-                                        borderRadius:
-                                            BorderRadius.circular(6),
-                                        border: Border.all(
-                                            color: AppColors.primary
-                                                .withOpacity(0.3)),
-                                      ),
-                                      child: const Row(children: [
-                                        Icon(Icons.edit_rounded,
-                                            size: 11,
-                                            color: AppColors.primary),
-                                        SizedBox(width: 3),
-                                        Text('Edit',
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors.primary,
-                                                fontWeight:
-                                                    FontWeight.w600)),
-                                      ]),
+                              Row(children: [
+                                const Icon(Icons.location_on_outlined,
+                                    size: 14,
+                                    color: AppColors.textSecondary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'RT ${_anggota.first.rt} / RW ${_anggota.first.rw}',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: _showEditRTRW,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary
+                                          .withOpacity(0.1),
+                                      borderRadius:
+                                          BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: AppColors.primary
+                                              .withOpacity(0.3)),
                                     ),
+                                    child: const Row(children: [
+                                      Icon(Icons.edit_rounded,
+                                          size: 11,
+                                          color: AppColors.primary),
+                                      SizedBox(width: 3),
+                                      Text('Edit',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.primary,
+                                              fontWeight:
+                                                  FontWeight.w600)),
+                                    ]),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ]),
                               const SizedBox(height: 4),
                               Text(
                                 '${_anggota.length} anggota  •  $ringkasan',
@@ -329,56 +321,88 @@ class _DetailKKPageState extends State<DetailKKPage> {
                             ],
                           ]),
                     ),
-                    const SizedBox(height: 16),
-                    ..._anggota.map((warga) => _AnggotaAccordion(
-                          warga: warga,
-                          isUnhidden: _isUnhidden,
-                          isExpanded: _expandedIds.contains(warga.id),
-                          onToggle: () => setState(() {
-                            if (_expandedIds.contains(warga.id)) {
-                              _expandedIds.remove(warga.id);
-                            } else {
-                              _expandedIds.add(warga.id!);
-                            }
-                          }),
-                          onEdit: () async {
-                            await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        FormWargaPage(warga: warga)));
-                            _loadAnggota();
-                          },
-                          onDelete: () async {
-                            final bool confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title:
-                                        const Text('Hapus Data'),
-                                    content: Text(
-                                        'Hapus data ${warga.nama}?'),
-                                    actions: [
-                                      TextButton(
-                                          onPressed: () => Navigator
-                                              .pop(context, false),
-                                          child: const Text('Batal')),
-                                      TextButton(
-                                          onPressed: () => Navigator
-                                              .pop(context, true),
-                                          child: const Text('Hapus',
-                                              style: TextStyle(
-                                                  color: Colors.red))),
-                                    ],
-                                  ),
-                                ) ??
-                                false;
-                            if (confirm && warga.id != null) {
-                              await _db.deleteWarga(warga.id!);
+                  ),
+                ),
+
+                // ── List anggota KK — LAZY ──
+                if (_anggota.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Text('Belum ada anggota',
+                            style:
+                                TextStyle(color: AppColors.textSecondary)),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final WargaModel warga = _anggota[index];
+                          return _AnggotaAccordion(
+                            warga: warga,
+                            isUnhidden: _isUnhidden,
+                            isExpanded:
+                                _expandedIds.contains(warga.id),
+                            onToggle: () => setState(() {
+                              if (_expandedIds.contains(warga.id)) {
+                                _expandedIds.remove(warga.id);
+                              } else {
+                                _expandedIds.add(warga.id!);
+                              }
+                            }),
+                            onEdit: () async {
+                              await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => FormWargaPage(
+                                          warga: warga)));
                               _loadAnggota();
-                            }
-                          },
-                        )),
-                  ]),
+                            },
+                            onDelete: () async {
+                              final bool confirm =
+                                  await showDialog<bool>(
+                                        context: context,
+                                        builder: (_) => AlertDialog(
+                                          title: const Text('Hapus Data'),
+                                          content: Text(
+                                              'Hapus data ${warga.nama}?'),
+                                          actions: [
+                                            TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(
+                                                        context, false),
+                                                child:
+                                                    const Text('Batal')),
+                                            TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(
+                                                        context, true),
+                                                child: const Text(
+                                                    'Hapus',
+                                                    style: TextStyle(
+                                                        color:
+                                                            Colors.red))),
+                                          ],
+                                        ),
+                                      ) ??
+                                      false;
+                              if (confirm && warga.id != null) {
+                                await _db.deleteWarga(warga.id!);
+                                _loadAnggota();
+                              }
+                            },
+                          );
+                        },
+                        childCount: _anggota.length,
+                      ),
+                    ),
+                  ),
+              ],
             ),
     );
   }
@@ -400,14 +424,16 @@ class _VerifikasiSheet extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
-          width: 40, height: 4,
+          width: 40,
+          height: 4,
           margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
               color: Colors.grey[300],
               borderRadius: BorderRadius.circular(2)),
         ),
         Container(
-          width: 64, height: 64,
+          width: 64,
+          height: 64,
           decoration: const BoxDecoration(
               color: AppColors.primarySurface, shape: BoxShape.circle),
           child: const Icon(Icons.fingerprint_rounded,
@@ -451,8 +477,8 @@ class _VerifikasiSheet extends StatelessWidget {
           child: TextButton(
             onPressed: onCancel,
             child: const Text('Batal',
-                style:
-                    TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 14)),
           ),
         ),
       ]),
@@ -574,15 +600,14 @@ class _AnggotaAccordion extends StatelessWidget {
                         OutlinedButton.icon(
                           onPressed: onDelete,
                           style: OutlinedButton.styleFrom(
-                              side:
-                                  const BorderSide(color: Colors.red),
+                              side: const BorderSide(color: Colors.red),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6)),
                           icon: const Icon(Icons.delete_rounded,
                               size: 16, color: Colors.red),
                           label: const Text('Hapus',
-                              style: TextStyle(
-                                  color: Colors.red, fontSize: 12)),
+                              style:
+                                  TextStyle(color: Colors.red, fontSize: 12)),
                         ),
                       ]),
                 ]),
@@ -599,11 +624,10 @@ class _AnggotaAccordion extends StatelessWidget {
               width: 110,
               child: Text(label,
                   style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary))),
+                      fontSize: 12, color: AppColors.textSecondary))),
           const Text(': ',
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
+              style:
+                  TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           Expanded(
               child: Text(value,
                   style: const TextStyle(
