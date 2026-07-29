@@ -103,14 +103,27 @@ class _LoginPageState extends State<LoginPage> {
                 // Logo
                 Center(
                   child: Container(
-                    width: 80,
-                    height: 80,
+                    width: 90,
+                    height: 90,
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.eco_rounded,
-                        color: Colors.white, size: 44),
+                    padding: const EdgeInsets.all(10),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/icon/icon.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -144,11 +157,10 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _userCtrl,
-                  decoration: const InputDecoration(
-                      hintText: 'Masukkan username'),
-                  validator: (v) => (v == null || v.isEmpty)
-                      ? 'Username wajib diisi'
-                      : null,
+                  decoration:
+                      const InputDecoration(hintText: 'Masukkan username'),
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Username wajib diisi' : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -171,13 +183,11 @@ class _LoginPageState extends State<LoginPage> {
                             : Icons.visibility_rounded,
                         color: AppColors.textSecondary,
                       ),
-                      onPressed: () =>
-                          setState(() => _obscure = !_obscure),
+                      onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
-                  validator: (v) => (v == null || v.isEmpty)
-                      ? 'Password wajib diisi'
-                      : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Password wajib diisi' : null,
                 ),
                 const SizedBox(height: 28),
 
@@ -192,8 +202,7 @@ class _LoginPageState extends State<LoginPage> {
                               strokeWidth: 2, color: Colors.white))
                       : const Text('Masuk',
                           style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold)),
+                              fontSize: 15, fontWeight: FontWeight.bold)),
                 ),
 
                 // Tombol Fingerprint
@@ -205,8 +214,7 @@ class _LoginPageState extends State<LoginPage> {
                       padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Text('atau',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary)),
+                              fontSize: 12, color: AppColors.textSecondary)),
                     ),
                     Expanded(child: Divider()),
                   ]),
@@ -214,9 +222,8 @@ class _LoginPageState extends State<LoginPage> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _isFingerprintLoading
-                          ? null
-                          : _loginWithFingerprint,
+                      onPressed:
+                          _isFingerprintLoading ? null : _loginWithFingerprint,
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.primary),
                         minimumSize: const Size(double.infinity, 48),
@@ -228,8 +235,7 @@ class _LoginPageState extends State<LoginPage> {
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary))
+                                  strokeWidth: 2, color: AppColors.primary))
                           : const Icon(Icons.fingerprint_rounded,
                               color: AppColors.primary, size: 28),
                       label: Text(
