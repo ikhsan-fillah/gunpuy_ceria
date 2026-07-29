@@ -206,7 +206,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
         title: const Row(children: [
           Icon(Icons.warning_rounded, color: Colors.red, size: 22),
           SizedBox(width: 8),
-          Text('Hapus Seluruh KK',
+          Text('Hapus KK',
               style: TextStyle(color: Colors.red, fontSize: 16)),
         ]),
         contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -475,7 +475,7 @@ class _DetailKKPageState extends State<DetailKKPage> {
                                 icon: const Icon(Icons.delete_forever_rounded,
                                     color: Colors.red, size: 17),
                                 label: const Text(
-                                  'Hapus Seluruh KK Ini',
+                                  'Hapus KK Ini',
                                   style: TextStyle(
                                       color: Colors.red,
                                       fontSize: 13,
